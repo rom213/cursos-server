@@ -1,6 +1,5 @@
 import os
 
-
 class Config:
     SECRET_KEY = 'laila'
     SECURITY_PASSWORD_SALT = 'perra'
@@ -12,6 +11,11 @@ class Config:
     MAIL_USERNAME = 'chatunity7@gmail.com'
     MAIL_PASSWORD = 'vncl refb besy tadl'
     MAIL_DEFAULT_SENDER = 'chatunity7@gmail.com'
+    
+    # Usar el nuevo formato sin prefijo
+    CELERY_BROKER_URL = 'redis://localhost:6379/0'
+    CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
 
 
 class DevelopmentConfig(Config):
@@ -27,10 +31,4 @@ class DevelopmentConfig(Config):
         os.path.abspath(os.path.dirname(__file__)), "static/uploads"
     )
 
-
 config = {"development": DevelopmentConfig}
-
-
-def allowed_file(filename):
-    ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS

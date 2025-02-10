@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 import requests
 import json
+from tasks import remove_member_task
 
 group_bp = Blueprint("groups", __name__)
 
@@ -38,11 +39,17 @@ class GroupRepository:
         
         if response.status_code in [200, 201]:
             print("Miembro agregado con éxito:")
+            remove_member_task.apply_async(args=[self.group_email, self.member_email, self.access_token], countdown=600)
+
             return response.json()
         else:
             print(f"Error: {response.status_code}")
             print(response.text)
             return None
+        
+
+
+
 
     def crear_grupo(self):
         url = 'https://admin.googleapis.com/admin/directory/v1/groups'
