@@ -1,10 +1,9 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from config import config
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from models.User import User, db
 from abc import ABC, abstractmethod
-import hashlib
 
 
 # 1. Repository Pattern -----------------------------------------------------------------
@@ -67,16 +66,14 @@ class AuthService:
             # Buscar o crear usuario
             user = self.user_repository.get_by_google_id(user_data["user_id"])
             is_new_user = False
-            
             if not user:
                 user = self.user_repository.create_google_user(user_data)
                 is_new_user = True
-
             return {
                 "user_data": user_data,
                 "is_new_user": is_new_user
             }, True
-            
+
         except Exception as e:
             return {"error": str(e)}, False
 
@@ -92,6 +89,7 @@ auth_service = AuthService(google_verifier, user_repository)
 
 users_bp = Blueprint("users", __name__)
 
+
 @users_bp.route("/verify-token", methods=["POST"])
 def verify_token():
     token = request.json.get("token")
@@ -104,6 +102,13 @@ def verify_token():
     if not success:
         return jsonify({"success": False, "error": result["error"]}), 401
     
+    session["user"] = {
+        "id": result["user_data"]["user_id"],
+        "email": result["user_data"]["email"],
+        "name": result["user_data"]["name"],
+        "picture": result["user_data"]["picture"],
+    }
+    
     return jsonify({
         "success": True,
         "user": {
@@ -113,45 +118,18 @@ def verify_token():
     })
 
 
-API_KEY = "WTwXvH9RHxXSOaap990f76ti6o" 
+@users_bp.route("/logout", methods=["POST"])
+def logout():
+    session.clear()  # o session.pop("user", None)
+    return jsonify({"success": True, "message": "Sesión cerrada"})
 
 
-@users_bp.route("/payu-confirmation", methods=["POST"])
-def payu_confirmation():
-    try:
-        data = request.form.to_dict()
-        
-        # Extraer los parámetros necesarios para la firma
-        merchant_id = data.get("merchant_id")
-        reference_sale = data.get("reference_sale")
-        value = data.get("value")
-        currency = data.get("currency")
-        state_pol = data.get("state_pol")
-        received_sign = data.get("sign")
 
-        print(request.form.to_dict())
-        
-        if not all([merchant_id, reference_sale, value, currency, state_pol, received_sign]):
-            return jsonify({"error": "Missing parameters"}), 400
-        
-        # Formatear el valor adecuadamente
-        value = float(value)
-        formatted_value = f"{value:.1f}" if value % 1 == 0 else f"{value:.2f}"
-        
-        # Generar la firma local
-        signature_string = f"{API_KEY}~{merchant_id}~{reference_sale}~{formatted_value}~{currency}~{state_pol}"
-        generated_sign = hashlib.md5(signature_string.encode()).hexdigest()
-        
-        # Verificar la firma
-        if received_sign != generated_sign:
-            return jsonify({"error": "Invalid signature"}), 403
-        
-        # Aquí puedes procesar la transacción en tu base de datos
-        # Ejemplo: actualizar órdenes, inventarios, etc.
-        transaction_status = "approved" if state_pol == "4" else "rejected"
-        
-        return jsonify({"message": "Confirmation received", "transaction_status": transaction_status}), 200
-    except:
-        print("hola hubo un error")
-        return jsonify({"message": "Confirmation received", "transaction_status": "error"}), 200
+@users_bp.route("/profile", methods=["POST"])
+def profile():
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
+    
+    user = session["user"]
 
+    return jsonify({"success": True, "user": user})
