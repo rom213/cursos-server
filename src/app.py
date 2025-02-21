@@ -6,7 +6,7 @@ from models import db
 from config import config
 from routes import init_app
 from extensions import mysql
-from celery_config import celery
+
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True, origins=["http://localhost:5173"] )
