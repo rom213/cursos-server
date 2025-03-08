@@ -13,7 +13,7 @@ def generate_token():
         scopes=['https://www.googleapis.com/auth/admin.directory.group']
     )
     request = google.auth.transport.requests.Request()
-    credentials.refresh(request)
+    credentials.refresh(request)    
     
 
     access_token = credentials.token

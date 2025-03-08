@@ -1,34 +1,33 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from servises.groups.repository import GroupRepository
+from servises.payment.payment_repository import PaymentRespository
+from servises.categories.category_model import CategoryModel
+from servises.Users.user_model import UserModel
 import hashlib
-import re
+import os
 
 
 payments_bp = Blueprint("payments", __name__)
 
 
 
-API_KEY = "WTwXvH9RHxXSOaap990f76ti6o" 
 
 
+def parse_data(dat, reference_sale):
+    items = dat.strip('|').split('|')  # Eliminar '|' inicial y final, luego dividir por '|'
+    parsed_items = []
 
-def extract_ids(reference_code):
-    # The expected format:
-    # <ignored>-<member_mail>-<category_id>[-<refer_id>]
-    # Example: "AAAsSSsssssasSsSSaAAssssAsskkasasasssA0ss13-member_mail-category_id-referId"
-    pattern = r'^[^-]+-([^-]+)-([^-]+)(?:-([^-]+))?$'
-    match = re.search(pattern, reference_code)
-    
-    if match:
-        return {
-            "member_email": match.group(1),
-            "category_id": match.group(2),
-            "google_id_refer": match.group(3) if match.group(3) is not None else None,
-            "reference_code": reference_code
+    for item in items:
+        parts = item.split(',')
+        obj = {
+            "category_id": int(parts[0]),  # Convertir el primer valor a entero
+            "google_id": parts[1] if len(parts) > 1 else None,  # Verificar si hay datos
+            "google_id_refer": parts[2] if len(parts) > 2 else None,
+            "reference_code": reference_sale
         }
-    else:
-        return None
+        parsed_items.append(obj)
 
+    return parsed_items
 
 
 
@@ -45,20 +44,21 @@ def payu_confirmation():
         state_pol = data.get("state_pol")
         received_sign = data.get("sign")
 
-        print(request.form.to_dict())
+
+        #print(request.form.to_dict())
         
-        # if not all([merchant_id, reference_sale, value, currency, state_pol, received_sign]):
-        #     return jsonify({"error": "Missing parameters"}), 400
+        if not all([merchant_id, reference_sale, value, currency, state_pol, received_sign]):
+            return jsonify({"error": "Missing parameters"}), 400
         
-        # value = float(value)
-        # formatted_value = f"{value:.1f}" if value % 1 == 0 else f"{value:.2f}"
+        value = float(value)
+        formatted_value = f"{value:.1f}" if value % 1 == 0 else f"{value:.2f}"
         
-        # signature_string = f"{API_KEY}~{merchant_id}~{reference_sale}~{formatted_value}~{currency}~{state_pol}"
-        # generated_sign = hashlib.md5(signature_string.encode()).hexdigest()
+        signature_string = f"{os.getenv("PAYU_API_KEY")}~{merchant_id}~{reference_sale}~{formatted_value}~{currency}~{state_pol}"
+        generated_sign = hashlib.md5(signature_string.encode()).hexdigest()
         
-        # # Verificar la firma
-        # if received_sign != generated_sign:
-        #     return jsonify({"error": "Invalid signature"}), 403
+        # Verificar la firma
+        if received_sign != generated_sign:
+            return jsonify({"error": "Invalid signature"}), 403
         
         # Aquí puedes procesar la transacción en tu base de datos
         # Ejemplo: actualizar órdenes, inventarios, etc.
@@ -68,10 +68,13 @@ def payu_confirmation():
         #enviados concatenanos con reference sale;
         transaction_status = "approved" if state_pol == "4" else "rejected"
 
+        cart_data = parse_data(data.get("extra1"), reference_sale) 
+
         if state_pol == "4":
-            result = extract_ids(reference_sale)
-            print(result)
-            GroupRepository.process_member_addition("agregar_miembro_grupo", data=result)
+            if isinstance(cart_data, list):
+                for data in cart_data:
+                    GroupRepository.process_member_addition("agregar_miembro_grupo", data=data)
+
             
         
         return jsonify({"message": "Confirmation received", "transaction_status": transaction_status}), 200
@@ -79,3 +82,35 @@ def payu_confirmation():
         print("hola hubo un error")
         return jsonify({"message": "Confirmation received", "transaction_status": "error"}), 200
 
+
+
+@payments_bp.route("/payu-firm", methods=["POST"])
+def payu_signature():
+        try:
+            if "user" not in session:
+                return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
+            
+
+            data= request.get_json()
+            if not data or "categories" not in data:
+                return jsonify({"error": "Invalid payload"}), 400
+            
+            categories = data["categories"] 
+            is_first_bought = not UserModel.is_bought(google_id=session["user"]["google_id"])
+
+            price = 0
+            for category in categories:
+                id_category = category.get("id_category")
+                cat = CategoryModel.get_by_id(category_id=id_category)
+                cat.calc_price(is_middle_price=is_first_bought)
+                price = price + cat.descuento_total_price
+                if is_first_bought is True:
+                    is_first_bought= False
+            
+
+            firm= PaymentRespository(price=price)
+            firm.generate_firm()
+
+            return jsonify({"signature": firm.signature, "reference_code":firm.reference_code, "price": firm.price }), 200
+        except :
+            return jsonify({"message": "posible error verificar"}), 500

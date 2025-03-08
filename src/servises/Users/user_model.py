@@ -1,5 +1,6 @@
 from models.User import User
 from models import db
+from servises.payment.payment_model import PaymentModel
 from datetime import datetime
 
 
@@ -17,12 +18,17 @@ class UserModel(User):
     @staticmethod
     def get_by_id(user_id):
         """Obtiene un usuario por su ID."""
-        return UserModel.query.get(user_id)
+        return UserModel.query.filter_by(id=user_id).first()
 
     @staticmethod
     def get_by_google_id(google_id):
         """Obtiene un usuario por su Google ID."""
         return UserModel.query.filter_by(google_id=google_id).first()
+    
+    @staticmethod
+    def is_bought(google_id):
+        """Obtiene un usuario por su Google ID."""
+        return PaymentModel.query.filter(PaymentModel.google_id == google_id).first() is not None
     
     @staticmethod
     def get_by_email(email):

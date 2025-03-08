@@ -4,6 +4,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from models.User import User, db
 from abc import ABC, abstractmethod
+from servises.Users.user_model import UserModel
 
 
 # 1. Repository Pattern -----------------------------------------------------------------
@@ -41,6 +42,7 @@ class GoogleTokenVerifier(TokenVerifier):
                 google_requests.Request(), 
                 self.client_id
             )
+
             return {
                 "user_id": idinfo.get("sub"),
                 "email": idinfo.get("email"),
@@ -63,12 +65,15 @@ class AuthService:
             # Verificar token
             user_data = self.token_verifier.verify(token)
             
+            print(user_data)
             # Buscar o crear usuario
             user = self.user_repository.get_by_google_id(user_data["user_id"])
             is_new_user = False
             if not user:
                 user = self.user_repository.create_google_user(user_data)
                 is_new_user = True
+
+
             return {
                 "user_data": user_data,
                 "is_new_user": is_new_user
@@ -78,7 +83,7 @@ class AuthService:
             return {"error": str(e)}, False
 
 # Configuración y blueprint -------------------------------------------------------------
-GOOGLE_CLIENT_ID = "150428135378-7p5fkl7douv1sj3kd0tofav3kneks7lv.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID = "150428135378-em2lm6k41hkremer0nn5rkhj916oseoi.apps.googleusercontent.com"
 
 # Inyección de dependencias
 user_repository = UserRepository()
@@ -93,6 +98,8 @@ users_bp = Blueprint("users", __name__)
 @users_bp.route("/verify-token", methods=["POST"])
 def verify_token():
     token = request.json.get("token")
+
+    print(token)
     
     if not token:
         return jsonify({"success": False, "error": "Token missing"}), 400
@@ -102,18 +109,21 @@ def verify_token():
     if not success:
         return jsonify({"success": False, "error": result["error"]}), 401
     
+
     session["user"] = {
-        "id": result["user_data"]["user_id"],
+        "google_id": result["user_data"]["user_id"],
         "email": result["user_data"]["email"],
         "name": result["user_data"]["name"],
-        "picture": result["user_data"]["picture"],
+        "given_name": result["user_data"]["given_name"],
+        "picture": result["user_data"]["picture"]
     }
-    
+
     return jsonify({
         "success": True,
         "user": {
-            **result["user_data"],
-            "register": result["is_new_user"]
+            **session["user"],
+            "register": result["is_new_user"],
+            "is_bought": UserModel.is_bought(google_id=session["user"]["google_id"])
         }
     })
 
@@ -129,7 +139,26 @@ def logout():
 def profile():
     if "user" not in session:
         return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
-    
-    user = session["user"]
+    return jsonify({
+        "success": True,
+        "user": {
+            **session["user"],
+            "is_bought": UserModel.is_bought(google_id=session["user"]["google_id"])
+        }
+    })
 
-    return jsonify({"success": True, "user": user})
+@users_bp.route("/user/<googleid>", methods=["GET"])
+def user_by_google_id(googleid):
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
+
+    print(googleid)
+    user = User.query.filter(User.google_id == googleid).first()
+
+
+    if not user:
+        return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
+
+    return jsonify({
+        "name": user.to_dict().get("name")  # Devuelve el diccionario completo del usuario
+    })

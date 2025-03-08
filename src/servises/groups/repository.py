@@ -9,6 +9,7 @@ import json
 from generateTokenAcces import access_token, generate_token, get_access_token
 
 
+
 class GroupRepository:
     def __init__(
         self,
@@ -106,7 +107,6 @@ class GroupRepository:
         return GroupRepository(
             group_id=group.id,
             group_email=group.group_mail,
-            member_email=data["member_email"],
             role=role
         )
 
@@ -165,41 +165,51 @@ class GroupRepository:
 
     def process_member_addition(method_name, data):
 
+
         ## ALERTA SOLO DEBE EXISTIR EN PAYMENTS SOLO UN GOOGLE_ID CON UNA CATEGORIA, QUEDA PENDIENTE
         repo = GroupRepository.create_member_group_repo(data=data)
         if isinstance(repo, tuple):
             return repo
         
-        user = UserModel.get_by_email(email=data["member_email"])
+        user = UserModel.get_by_google_id(google_id=data.get("google_id"))
+
+
 
         if not user:
             return jsonify({"error": "Usuario no encontrado"}), 404
+    
+        repo.member_email= user.email
 
         try:
+            is_refer = data.get("google_id_refer") is not None
+            if is_refer is True:
+                refer= ReferModel(google_id=data.get("google_id_refer"))
+                is_valid_refer=refer.verify()
+                if not is_valid_refer:
+                    return jsonify({"error": "violacion del sistema"}), 423
+
+            payment=PaymentModel(status="ERROR", is_refer=is_refer, category_id=data.get("category_id"), signature=data.get("reference_code"), google_id=user.google_id)
+            
+            verify_payment  = payment.verify()
+            if not verify_payment:
+                return jsonify({"error": "violacion del sistema"}), 423
+            
             result = getattr(repo, method_name)()
 
             payment_status = "SUCCESS" if result else "ERROR"
-            is_refer = data.get("google_id_refer") is not None
 
-            print(is_refer)
+            payment.status=payment_status
+            
 
-            payment=PaymentModel.create_payment(
-            google_id=user.google_id,
-            category_id=data.get("category_id"),
-            signature=data.get("reference_code"),
-            status=payment_status,
-            isRefer=is_refer)
+
+            payment.save()
+
 
             if is_refer is True:
-                refer= ReferModel(google_id=data.get("google_id_refer"), payment_id=payment.id)
-                is_valid_refer=refer.verify()
-
-                print(is_valid_refer)
-                if not is_valid_refer:
-                    return jsonify({"error": "violacion del sistema"}), 423
-                
+                refer.payment_id=payment.id
                 refer.save()
-            
+
+
             return jsonify({"message": "the member it was create sastisfactory"}), 200
         except Exception as ex:
             return jsonify({"error": f"Error al agregar el miembro al grupo: {str(ex)}"}), 500
