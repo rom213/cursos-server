@@ -5,13 +5,17 @@ from google.auth.transport import requests as google_requests
 from models.User import User, db
 from abc import ABC, abstractmethod
 from servises.Users.user_model import UserModel
+from models.account import Account
 
 
 # 1. Repository Pattern -----------------------------------------------------------------
 class UserRepository:
     @staticmethod
     def get_by_google_id(google_id: str) -> User:
-        return User.query.filter_by(google_id=google_id).first()
+        user=User.query.outerjoin(Account, Account.google_id == User.google_id)\
+                     .filter(User.google_id == google_id)\
+                     .first()
+        return user
 
     @staticmethod
     def create_google_user(user_data: dict) -> User:
@@ -65,9 +69,10 @@ class AuthService:
             # Verificar token
             user_data = self.token_verifier.verify(token)
             
-            print(user_data)
             # Buscar o crear usuario
             user = self.user_repository.get_by_google_id(user_data["user_id"])
+                
+
             is_new_user = False
             if not user:
                 user = self.user_repository.create_google_user(user_data)
@@ -75,7 +80,7 @@ class AuthService:
 
 
             return {
-                "user_data": user_data,
+                "user_data": user,
                 "is_new_user": is_new_user
             }, True
 
@@ -83,7 +88,7 @@ class AuthService:
             return {"error": str(e)}, False
 
 # Configuración y blueprint -------------------------------------------------------------
-GOOGLE_CLIENT_ID = "150428135378-em2lm6k41hkremer0nn5rkhj916oseoi.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID = "569719966413-vb4hran623dj2mj7urgumsc6u5627dmb.apps.googleusercontent.com"
 
 # Inyección de dependencias
 user_repository = UserRepository()
@@ -98,24 +103,28 @@ users_bp = Blueprint("users", __name__)
 @users_bp.route("/verify-token", methods=["POST"])
 def verify_token():
     token = request.json.get("token")
-
-    print(token)
     
     if not token:
         return jsonify({"success": False, "error": "Token missing"}), 400
     
+
+
+
     result, success = auth_service.authenticate(token)
-    
+    print(result["user_data"].accounts[0])
     if not success:
         return jsonify({"success": False, "error": result["error"]}), 401
-    
+
+
+
+
 
     session["user"] = {
-        "google_id": result["user_data"]["user_id"],
-        "email": result["user_data"]["email"],
-        "name": result["user_data"]["name"],
-        "given_name": result["user_data"]["given_name"],
-        "picture": result["user_data"]["picture"]
+        "google_id": result["user_data"].google_id,
+        "email": result["user_data"].email,
+        "name": result["user_data"].name,
+        "given_name": result["user_data"].name.split()[0],
+        "picture": result["user_data"].picture
     }
 
     return jsonify({

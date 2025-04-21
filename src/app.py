@@ -9,7 +9,7 @@ from extensions import mysql
 
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True, origins=["http://localhost:3001"] )
+CORS(app, supports_credentials=True)
 
 # 🔹 Primero carga la configuración
 app.config.from_object(config["development"])

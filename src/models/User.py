@@ -15,6 +15,8 @@ class User(db.Model):
     picture = db.Column(db.String(200), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     delete_at = db.Column(db.DateTime,  nullable=True)
+    
+    accounts = db.relationship('Account', backref='user', lazy=True)
 
     def __init__(self, google_id, email, name, picture, rol="user"):
         self.google_id=google_id
