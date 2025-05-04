@@ -111,19 +111,23 @@ def verify_token():
 
 
     result, success = auth_service.authenticate(token)
-    print(result["user_data"].accounts[0])
+    # print(result["user_data"].accounts[0].name_acc)
     if not success:
         return jsonify({"success": False, "error": result["error"]}), 401
+    
 
-
+    accounts = [acc.to_dict() for acc in result["user_data"].accounts]
 
 
 
     session["user"] = {
         "google_id": result["user_data"].google_id,
+        "accounts": accounts,
         "email": result["user_data"].email,
+        "num_whatsapp": result["user_data"].num_whatsapp.split()[1],
         "name": result["user_data"].name,
         "given_name": result["user_data"].name.split()[0],
+        "prefix":result["user_data"].num_whatsapp.split()[0],
         "picture": result["user_data"].picture
     }
 
@@ -142,12 +146,29 @@ def logout():
     session.clear()  # o session.pop("user", None)
     return jsonify({"success": True, "message": "Sesión cerrada"})
 
-
-
 @users_bp.route("/profile", methods=["POST"])
 def profile():
+
+    # verifica si hay seccion y actualiza cualquier novedad en el usuario
     if "user" not in session:
         return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
+    
+    user = user_repository.get_by_google_id(session["user"]["google_id"])
+    
+    
+    accounts = [acc.to_dict() for acc in user.accounts]
+
+    session["user"] = {
+        "google_id": user.google_id,
+        "accounts": accounts,
+        "email": user.email,
+        "num_whatsapp":user.num_whatsapp.split()[1],
+        "name": user.name,
+        "given_name": user.name.split()[0],
+        "prefix":user.num_whatsapp.split()[0],
+        "picture": user.picture
+    }
+
     return jsonify({
         "success": True,
         "user": {
@@ -163,7 +184,6 @@ def user_by_google_id(googleid):
 
     print(googleid)
     user = User.query.filter(User.google_id == googleid).first()
-
 
     if not user:
         return jsonify({"success": False, "error": "Usuario no encontrado"}), 404

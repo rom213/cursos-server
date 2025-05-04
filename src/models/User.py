@@ -14,6 +14,7 @@ class User(db.Model):
     name = db.Column(db.String(200), nullable=False)
     picture = db.Column(db.String(200), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    num_whatsapp= db.Column(db.String(20), nullable=True)
     delete_at = db.Column(db.DateTime,  nullable=True)
     
     accounts = db.relationship('Account', backref='user', lazy=True)
@@ -30,6 +31,7 @@ class User(db.Model):
             "id": self.id,
             "google_id": self.google_id,
             "email": self.email,
+            "num_whatsapp":self.num_whatsapp,
             "rol": self.rol,
             "name": self.name,
             "picture": self.picture,
