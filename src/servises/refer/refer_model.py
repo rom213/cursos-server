@@ -55,7 +55,7 @@ class ReferModel(Refer):
     def verify(self):
         """
         Verifica si ya existe un registro con el mismo google_id y payment_id.
-        Retorna True si existe, de lo contrario False.
+        Retorna True si existe, de lo contrario False. esto es para verificar compras
         """
         exists = Refer.query.filter(
             Refer.google_id == self.google_id,

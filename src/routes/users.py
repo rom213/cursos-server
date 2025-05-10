@@ -106,9 +106,6 @@ def verify_token():
     
     if not token:
         return jsonify({"success": False, "error": "Token missing"}), 400
-    
-
-
 
     result, success = auth_service.authenticate(token)
     # print(result["user_data"].accounts[0].name_acc)
@@ -118,8 +115,6 @@ def verify_token():
 
     accounts = [acc.to_dict() for acc in result["user_data"].accounts]
 
-
-
     session["user"] = {
         "google_id": result["user_data"].google_id,
         "accounts": accounts,
@@ -128,7 +123,8 @@ def verify_token():
         "name": result["user_data"].name,
         "given_name": result["user_data"].name.split()[0],
         "prefix":result["user_data"].num_whatsapp.split()[0],
-        "picture": result["user_data"].picture
+        "picture": result["user_data"].picture,
+        "is_bought": UserModel.is_bought(google_id=session["user"]["google_id"])
     }
 
     return jsonify({
@@ -136,7 +132,7 @@ def verify_token():
         "user": {
             **session["user"],
             "register": result["is_new_user"],
-            "is_bought": UserModel.is_bought(google_id=session["user"]["google_id"])
+            
         }
     })
 
@@ -166,28 +162,38 @@ def profile():
         "name": user.name,
         "given_name": user.name.split()[0],
         "prefix":user.num_whatsapp.split()[0],
-        "picture": user.picture
+        "picture": user.picture,
+        "is_bought": UserModel.is_bought(google_id=session["user"]["google_id"])
     }
 
     return jsonify({
         "success": True,
         "user": {
             **session["user"],
-            "is_bought": UserModel.is_bought(google_id=session["user"]["google_id"])
         }
     })
 
 @users_bp.route("/user/<googleid>", methods=["GET"])
-def user_by_google_id(googleid):
+def user_by_google_id_afiliaty(googleid):
+
+    """este metodo se usa para verificar si existe el usuario de google id"""
+    
     if "user" not in session:
         return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
+    
+    if session["user"].get("is_bought"):
+        return jsonify({"success": False, "error": "buen intento"}), 403
 
-    print(googleid)
-    user = User.query.filter(User.google_id == googleid).first()
+    print(session["user"].get("is_bought")) 
+    user = UserModel.get_by_google_id(google_id=googleid)
+    is_bought = UserModel.is_bought(google_id=googleid)
 
-    if not user:
+    if not is_bought:
         return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
 
+    if not user:
+        return jsonify({"success": False, "error": "Usuario no registrado, pero con compra válida"}), 400
+    
     return jsonify({
-        "name": user.to_dict().get("name")  # Devuelve el diccionario completo del usuario
+        "name": user.to_dict().get("name")
     })

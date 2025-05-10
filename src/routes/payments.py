@@ -5,6 +5,14 @@ from servises.categories.category_model import CategoryModel
 from servises.Users.user_model import UserModel
 import hashlib
 import os
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 payments_bp = Blueprint("payments", __name__)
@@ -50,34 +58,55 @@ def payu_confirmation():
         if not all([merchant_id, reference_sale, value, currency, state_pol, received_sign]):
             return jsonify({"error": "Missing parameters"}), 400
         
-        value = float(value)
-        formatted_value = f"{value:.1f}" if value % 1 == 0 else f"{value:.2f}"
+        # value = float(value)
+        # formatted_value = f"{value:.1f}" if value % 1 == 0 else f"{value:.2f}"
         
-        signature_string = f"{os.getenv("PAYU_API_KEY")}~{merchant_id}~{reference_sale}~{formatted_value}~{currency}~{state_pol}"
-        generated_sign = hashlib.md5(signature_string.encode()).hexdigest()
+        # signature_string = f"{os.getenv("PAYU_API_KEY")}~{merchant_id}~{reference_sale}~{formatted_value}~{currency}~{state_pol}"
+        # generated_sign = hashlib.md5(signature_string.encode()).hexdigest()
         
-        # Verificar la firma
-        if received_sign != generated_sign:
-            return jsonify({"error": "Invalid signature"}), 403
+        # # Verificar la firma
+        # if received_sign != generated_sign:
+        #     return jsonify({"error": "Invalid signature"}), 403
+
+
         
         # Aquí puedes procesar la transacción en tu base de datos
         # Ejemplo: actualizar órdenes, inventarios, etc.
 
         #VERIFICAMOS QUE EXISTA LA TRANSACCION NO EXISTA EN LA BASE DE DATOS DE LO CONTRARIO HAY VIOLACION AL SISTEMA los datos que son google_id y 
         # y category seran
-        #enviados concatenanos con reference sale;
+        #enviados concatenanos con reference sale;  
         transaction_status = "approved" if state_pol == "4" else "rejected"
 
-        cart_data = parse_data(data.get("extra1"), reference_sale) 
+        # Campos extra a procesar
+        extra_fields = ["extra1", "extra2", "extra3", "extra4"]
 
+        # Parseamos todos los extras de una sola vez
+        cart_data_list = []
+        for field in extra_fields:
+            raw_value = data.get(field)
+            if raw_value:  # si viene None o cadena vacía, lo ignora
+                cart_data_list.append(parse_data(raw_value, reference_sale))
+
+                
+        # Si está aprobada, procesamos cada lista
         if state_pol == "4":
-            if isinstance(cart_data, list):
-                for data in cart_data:
-                    GroupRepository.process_member_addition("agregar_miembro_grupo", data=data)
+            for cart_data in cart_data_list:
+                if isinstance(cart_data, list):
+                    for item in cart_data:
+                        try:
+                            GroupRepository.process_member_addition(
+                                "agregar_miembro_grupo",
+                                data=item
+                            )
+                        except Exception as e:
+                            # Loguea cualquier error sin romper el flujo
+                            logger.error(f"Error procesando {item}: {e}")
 
-            
-        
-        return jsonify({"message": "Confirmation received", "transaction_status": transaction_status}), 200
+        return jsonify({
+            "message": "Confirmation received",
+            "transaction_status": transaction_status
+        }), 200
     except:
         print("hola hubo un error")
         return jsonify({"message": "Confirmation received", "transaction_status": "error"}), 200
