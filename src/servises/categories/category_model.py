@@ -62,6 +62,19 @@ class CategoryModel(Category):
         """Recupera una instancia de CategoryModel por su ID."""
         return cls.query.get(category_id)
     
+    @classmethod
+    def search_by_title(cls, search_term, limit=None):
+        """
+        Retorna una lista de categorías cuyo título contiene el término de búsqueda (case-insensitive).
+        :param search_term: Cadena para buscar dentro del título.
+        :param limit: Número máximo de resultados a devolver (opcional).
+        :return: Lista de instancias CategoryModel.
+        """
+        query = cls.query.filter(cls.titulo.ilike(f"%{search_term}%"))
+        if limit:
+            return query.limit(limit).all()
+        return query.all()
+    
     def user_is_bought(self):
         if "user" not in session:
             return False
