@@ -22,26 +22,30 @@ def all_categories():
 
 @category_bp.route('/categories/deep-search', methods=['GET'])
 def deep_search():
-    search_term = request.args.get('q', '')
-    limit = request.args.get('limit', type=int)
-
-    # Filtro SQL directamente con ilike
-    query = CategoryModel.query \
-        .outerjoin(Course) \
-        .filter(
-            or_(
-                func.lower(CategoryModel.titulo).ilike(f"%{search_term.lower()}%"),
-                func.lower(Course.name).ilike(f"%{search_term.lower()}%"),
-                func.lower(Course.autor).ilike(f"%{search_term.lower()}%")
-            )
-        ) \
-        .options(joinedload(CategoryModel.courses)) \
-        .distinct()
-
-    if limit:
-        query = query.limit(limit)
     
-    categories = query.all()
-    return jsonify([cat.to_dict() for cat in categories])
+    search_term = request.args.get('q', '')
+    if search_term:
+        limit = request.args.get('limit', type=int)
+        print(search_term, limit);
+        # Filtro SQL directamente con ilike
+        query = CategoryModel.query \
+            .outerjoin(Course) \
+            .filter(
+                or_(
+                    func.lower(CategoryModel.titulo).ilike(f"%{search_term.lower()}%"),
+                    func.lower(Course.name).ilike(f"%{search_term.lower()}%"),
+                    func.lower(Course.autor).ilike(f"%{search_term.lower()}%")
+                )
+            ) \
+            .options(joinedload(CategoryModel.courses)) \
+            .distinct()
+
+        if limit:
+            query = query.limit(limit)
+        
+        categories = query.all()
+        return jsonify([cat.to_dict() for cat in categories])
+    
+    return jsonify([])
     
     

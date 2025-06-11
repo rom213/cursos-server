@@ -89,7 +89,7 @@ class AuthService:
 
 # Configuración y blueprint -------------------------------------------------------------
 GOOGLE_CLIENT_ID = "569719966413-vb4hran623dj2mj7urgumsc6u5627dmb.apps.googleusercontent.com"
-
+""
 # Inyección de dependencias
 user_repository = UserRepository()
 google_verifier = GoogleTokenVerifier(GOOGLE_CLIENT_ID)
@@ -124,7 +124,7 @@ def verify_token():
         "given_name": result["user_data"].name.split()[0],
         "prefix":result["user_data"].num_whatsapp.split()[0],
         "picture": result["user_data"].picture,
-        "is_bought": UserModel.is_bought(google_id=session["user"]["google_id"])
+        "is_bought": UserModel.is_bought(google_id=result["user_data"].google_id)
     }
 
     return jsonify({
@@ -163,7 +163,7 @@ def profile():
         "given_name": user.name.split()[0],
         "prefix":user.num_whatsapp.split()[0],
         "picture": user.picture,
-        "is_bought": UserModel.is_bought(google_id=session["user"]["google_id"])
+        "is_bought": UserModel.is_bought(google_id=user.google_id)
     }
 
     return jsonify({
