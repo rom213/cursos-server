@@ -116,42 +116,45 @@ class CategoryModel(Category):
         porcentaje = (1 - (float(precio_final) / float(precio_original))) * 100
         return porcentaje
 
+    # Versión corregida de calc_price
     def calc_price(self, is_middle_price, is_not_payu_request=True):
         """
-        Calcula el precio final y el descuento efectivo basado en las condiciones
-        del usuario y del producto.
+        Calcula el precio final y el descuento efectivo, retornando los valores
+        sin modificar el estado del objeto.
         """
-        is_bought= False
+        is_bought = False
         if is_not_payu_request:
             is_bought = self.user_is_any_bougth()
 
-
-        # 1. Calcula el precio con el descuento inicial
+        # 1. Calcula el precio con el descuento inicial de la categoría
         precio_descontado = self.calcular_precio_con_descuento(self.precio, self.descuento)
+        
+        precio_final = 0
+        descuento_aplicado = self.descuento # Por defecto, es el de la categoría
 
         # 2. Decide si se aplica el descuento adicional del 50%
-        # Se combinaron las dos condiciones 'if' originales ya que hacían lo mismo.
         if is_bought or (not is_bought and not is_middle_price):
             # Aplica el 50% de descuento adicional sobre el precio ya rebajado
             precio_final = round(precio_descontado * 0.5)
-            print("ROMAE")
-            # Actualiza los atributos del objeto
-            self.descuento_total_price = precio_final
-            self.descuento = self.calcular_porcentaje_efectivo(self.precio, precio_final)
+            # Calcula el porcentaje efectivo para este cálculo específico
+            descuento_aplicado = self.calcular_porcentaje_efectivo(self.precio, precio_final)
         else:
-            # Si no se cumplen las condiciones, el precio final es el que tiene el descuento inicial
-            self.descuento_total_price = precio_descontado
-            # En este caso, self.descuento no se modifica y mantiene su valor original.
-
-
+            # Si no, el precio final es el que tiene el descuento inicial
+            precio_final = precio_descontado
+        
+        # Retorna un diccionario con los resultados del cálculo
+        return {
+            'precio_final': precio_final,
+            'descuento_aplicado': descuento_aplicado
+        }
 
 
     def generate_firm_payu(self):
 
-        self.calc_price(is_middle_price=True)
-        repo= PaymentRespository(price=self.descuento_total_price)
+        values=self.calc_price(is_middle_price=True)
+        repo= PaymentRespository(price=values.get("precio_final"))
         repo.generate_firm()
-        return {'signature':repo.signature, "reference_code": repo.reference_code, 'precios_des':self.descuento_total_price}
+        return {'signature':repo.signature, "reference_code": repo.reference_code, 'precios_des':values.get("precio_final")}
 
     def to_dict(self):
         """Convierte la instancia en un diccionario para facilitar la serialización."""

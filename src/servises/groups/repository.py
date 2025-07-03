@@ -224,8 +224,7 @@ class ReferService:
         refund_percentage = float(os.getenv("REFUND_PERCENTAGE"))
         pay_value = float(data.get("pay_value_refer", "0"))
         refund_value = (pay_value * refund_percentage) / 100
-
-        refer = ReferModel(google_id=google_id_refer, value=refund_value)
+        refer = ReferModel(google_id=google_id_refer, value=refund_value, porcentage=refund_percentage)
         if not refer.verify():
             raise PermissionError("Referido no válido")
 
@@ -237,20 +236,20 @@ class PaymentService:
         cat = CategoryModel.get_by_id(data.get("category_id"))
 
         # lo usamos para atrapar errores y evitar el no registro de una compra
+        
         try:
             if is_refer:
-                cat.calc_price(False, False)
+                values=cat.calc_price(True, False)
             else:
                 is_first_bought = not  UserModel.is_bought(google_id=data.get("google_id"))
-                # print(is_first_bought)
-                cat.calc_price(is_first_bought, False)
+                values.calc_price(is_first_bought, False)
         except Exception as e:
             print(e)
         
         
         payment = PaymentModel(
             status="ERROR",
-            price=cat.descuento_total_price,
+            price=values.get("precio_final"),
             is_refer=is_refer,
             category_id=data.get("category_id"),
             signature=data.get("reference_code"),

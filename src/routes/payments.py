@@ -134,7 +134,7 @@ def payu_signature():
                 cat = CategoryModel.get_by_id(category_id=id_category)
                 values=cat.calc_price(is_middle_price=is_first_bought)
 
-                price = price + cat.descuento_total_price
+                price = price + values.get("precio_final")
                 
                 if is_first_bought is True:
                     is_first_bought= False

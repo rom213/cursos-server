@@ -5,6 +5,7 @@ from models.Refund import Refund
 class Refer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     google_id = db.Column(db.String(100), db.ForeignKey('user.google_id'), nullable=False)
+    porcentage = db.Column(db.String(100), nullable=False)
     payment_id = db.Column(db.Integer, db.ForeignKey('payment.id'), nullable=True)
     refund_id = db.Column(db.Integer, db.ForeignKey('refund.id'), nullable=True, unique=True)
     value = db.Column(db.String(100), nullable=False)

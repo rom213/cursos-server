@@ -3,8 +3,9 @@ from models.Refer import Refer
 from models import db
 
 class ReferModel(Refer):
-    def __init__(self, google_id, value, payment_id="0", is_pay=False, refund=None):
+    def __init__(self, google_id, value, porcentage, payment_id="0", is_pay=False, refund=None):
         self.value=value
+        self.porcentage=porcentage
         self.google_id = google_id
         self.payment_id = payment_id
         self.refund = refund
