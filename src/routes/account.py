@@ -43,4 +43,4 @@ def update():
         print(e)
         return jsonify({"status":'no succes'}), 501
   
-    
+

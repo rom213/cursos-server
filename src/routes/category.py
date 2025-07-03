@@ -18,8 +18,6 @@ def all_categories():
 
 
 
-
-
 @category_bp.route('/categories/deep-search', methods=['GET'])
 def deep_search():
     

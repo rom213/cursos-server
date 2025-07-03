@@ -103,20 +103,46 @@ class CategoryModel(Category):
         ).first() is not None
     
 
-    def calc_price(self, is_middle_price):
-        is_bought=self.user_is_any_bougth()
-        self.descuento_total_price = round(float(self.precio) - (float(self.precio) * (float(self.descuento) / 100)))
+    def calcular_precio_con_descuento(self, precio, descuento_porcentaje):
+        """Calcula el precio final aplicando un descuento en porcentaje."""
+        factor_descuento = float(descuento_porcentaje) / 100
+        precio_final = float(precio) * (1 - factor_descuento)
+        return round(precio_final)
 
-        if  is_bought:
-            self.descuento_total_price = round(self.descuento_total_price * 0.5)
-            descuento_total = (1 - (self.descuento_total_price / float(self.precio))) * 100
-            self.descuento = descuento_total
-            return
+    def calcular_porcentaje_efectivo(self, precio_original, precio_final):
+        if float(precio_original) == 0:
+            return 0  # Evitar división por cero
+        
+        porcentaje = (1 - (float(precio_final) / float(precio_original))) * 100
+        return porcentaje
 
-        if not is_bought and not is_middle_price:
-            self.descuento_total_price = round(self.descuento_total_price * 0.5)
-            descuento_total = (1 - (self.descuento_total_price / float(self.precio))) * 100
-            self.descuento = descuento_total
+    def calc_price(self, is_middle_price, is_not_payu_request=True):
+        """
+        Calcula el precio final y el descuento efectivo basado en las condiciones
+        del usuario y del producto.
+        """
+        is_bought= False
+        if is_not_payu_request:
+            is_bought = self.user_is_any_bougth()
+
+
+        # 1. Calcula el precio con el descuento inicial
+        precio_descontado = self.calcular_precio_con_descuento(self.precio, self.descuento)
+
+        # 2. Decide si se aplica el descuento adicional del 50%
+        # Se combinaron las dos condiciones 'if' originales ya que hacían lo mismo.
+        if is_bought or (not is_bought and not is_middle_price):
+            # Aplica el 50% de descuento adicional sobre el precio ya rebajado
+            precio_final = round(precio_descontado * 0.5)
+            print("ROMAE")
+            # Actualiza los atributos del objeto
+            self.descuento_total_price = precio_final
+            self.descuento = self.calcular_porcentaje_efectivo(self.precio, precio_final)
+        else:
+            # Si no se cumplen las condiciones, el precio final es el que tiene el descuento inicial
+            self.descuento_total_price = precio_descontado
+            # En este caso, self.descuento no se modifica y mantiene su valor original.
+
 
 
 

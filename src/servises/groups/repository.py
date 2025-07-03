@@ -7,6 +7,7 @@ from servises.payment.payment_model import PaymentModel
 from servises.refer.refer_model import ReferModel
 import json
 from generateTokenAcces import access_token, generate_token, get_access_token
+import os
 
 
 
@@ -164,52 +165,99 @@ class GroupRepository:
             return schedule_response.json()
 
     def process_member_addition(method_name, data):
-
-
-        ## ALERTA SOLO DEBE EXISTIR EN PAYMENTS SOLO UN GOOGLE_ID CON UNA CATEGORIA, QUEDA PENDIENTE
-        repo = GroupRepository.create_member_group_repo(data=data)
-        if isinstance(repo, tuple):
-            return repo
-        
-        user = UserModel.get_by_google_id(google_id=data.get("google_id"))
-
-
-
-        if not user:
-            return jsonify({"error": "Usuario no encontrado"}), 404
-    
-        repo.member_email= user.email
-
         try:
-            is_refer = data.get("google_id_refer") is not None
-            if is_refer is True:
-                refer= ReferModel(google_id=data.get("google_id_refer"))
-                is_valid_refer=refer.verify()
-                if not is_valid_refer:
-                    return jsonify({"error": "violacion del sistema"}), 423
+            repo, google_id, google_id_refer = GroupService.add_member(method_name, data)
 
-            payment=PaymentModel(status="ERROR", is_refer=is_refer, category_id=data.get("category_id"), signature=data.get("reference_code"), google_id=user.google_id)
-            
-            verify_payment  = payment.verify()
-            if not verify_payment:
-                return jsonify({"error": "violacion del sistema"}), 423
-            
+            user = UserService.get_user_by_google_id(google_id)
+            repo.member_email = user.email
+
+            refer = ReferService.handle_referral(data)
+            is_refer = refer is not None
+
+            payment = PaymentService.process_payment(user.google_id, data, is_refer)
+
             result = getattr(repo, method_name)()
-
-            payment_status = "SUCCESS" if result else "ERROR"
-
-            payment.status=payment_status
-            
-
-
+            payment.status = "SUCCESS" if result else "ERROR"
             payment.save()
 
-
-            if is_refer is True:
-                refer.payment_id=payment.id
+            if refer:
+                refer.payment_id = payment.id
                 refer.save()
 
+            return jsonify({"message": "El miembro fue creado satisfactoriamente"}), 200
 
-            return jsonify({"message": "the member it was create sastisfactory"}), 200
+        except ValueError as ve:
+            return jsonify({"error": str(ve)}), 404
+        except PermissionError as pe:
+            return jsonify({"error": str(pe)}), 423
         except Exception as ex:
             return jsonify({"error": f"Error al agregar el miembro al grupo: {str(ex)}"}), 500
+
+
+
+
+class GroupService:
+    @staticmethod
+    def add_member(method_name: str, data: dict):
+        repo = GroupRepository.create_member_group_repo(data=data)
+        if isinstance(repo, tuple):
+            return repo, None, None
+
+        return repo, data.get("google_id"), data.get("google_id_refer")
+    
+
+class UserService:
+    @staticmethod
+    def get_user_by_google_id(google_id: str):
+        user = UserModel.get_by_google_id(google_id)
+        if not user:
+            raise ValueError("Usuario no encontrado")
+        return user
+
+class ReferService:
+    @staticmethod
+    def handle_referral(data: dict):
+        google_id_refer = data.get("google_id_refer")
+        if not google_id_refer:
+            return None
+
+        refund_percentage = float(os.getenv("REFUND_PERCENTAGE"))
+        pay_value = float(data.get("pay_value_refer", "0"))
+        refund_value = (pay_value * refund_percentage) / 100
+
+        refer = ReferModel(google_id=google_id_refer, value=refund_value)
+        if not refer.verify():
+            raise PermissionError("Referido no válido")
+
+        return refer
+    
+class PaymentService:
+    @staticmethod
+    def process_payment(user_google_id, data, is_refer):
+        cat = CategoryModel.get_by_id(data.get("category_id"))
+
+        # lo usamos para atrapar errores y evitar el no registro de una compra
+        try:
+            if is_refer:
+                cat.calc_price(False, False)
+            else:
+                is_first_bought = not  UserModel.is_bought(google_id=data.get("google_id"))
+                # print(is_first_bought)
+                cat.calc_price(is_first_bought, False)
+        except Exception as e:
+            print(e)
+        
+        
+        payment = PaymentModel(
+            status="ERROR",
+            price=cat.descuento_total_price,
+            is_refer=is_refer,
+            category_id=data.get("category_id"),
+            signature=data.get("reference_code"),
+            google_id=user_google_id
+        )
+
+        if not payment.verify():
+            raise PermissionError("Pago no verificado")
+
+        return payment

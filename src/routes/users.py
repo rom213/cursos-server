@@ -176,7 +176,7 @@ def profile():
 @users_bp.route("/user/<googleid>", methods=["GET"])
 def user_by_google_id_afiliaty(googleid):
 
-    """este metodo se usa para verificar si existe el usuario de google id"""
+    """este metodo se usa para verificar si existe el usuario de google id y verifica si el usuario a comprado"""
     
     if "user" not in session:
         return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401

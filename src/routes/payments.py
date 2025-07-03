@@ -21,7 +21,7 @@ payments_bp = Blueprint("payments", __name__)
 
 
 
-def parse_data(dat, reference_sale):
+def parse_data(dat, reference_sale, pay_value):
     items = dat.strip('|').split('|')  # Eliminar '|' inicial y final, luego dividir por '|'
     parsed_items = []
 
@@ -31,7 +31,8 @@ def parse_data(dat, reference_sale):
             "category_id": int(parts[0]),  # Convertir el primer valor a entero
             "google_id": parts[1] if len(parts) > 1 else None,  # Verificar si hay datos
             "google_id_refer": parts[2] if len(parts) > 2 else None,
-            "reference_code": reference_sale
+            "reference_code": reference_sale,
+            "pay_value_refer":pay_value
         }
         parsed_items.append(obj)
 
@@ -86,9 +87,9 @@ def payu_confirmation():
         for field in extra_fields:
             raw_value = data.get(field)
             if raw_value:  # si viene None o cadena vacía, lo ignora
-                cart_data_list.append(parse_data(raw_value, reference_sale))
+                cart_data_list.append(parse_data(raw_value, reference_sale, value))
 
-                
+
         # Si está aprobada, procesamos cada lista
         if state_pol == "4":
             for cart_data in cart_data_list:
@@ -131,8 +132,10 @@ def payu_signature():
             for category in categories:
                 id_category = category.get("id_category")
                 cat = CategoryModel.get_by_id(category_id=id_category)
-                cat.calc_price(is_middle_price=is_first_bought)
+                values=cat.calc_price(is_middle_price=is_first_bought)
+
                 price = price + cat.descuento_total_price
+                
                 if is_first_bought is True:
                     is_first_bought= False
             

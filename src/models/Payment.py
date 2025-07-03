@@ -6,6 +6,7 @@ from datetime import datetime
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     signature = db.Column(db.String(100), nullable=False)
+    price = db.Column(db.String(100), nullable=False)
     google_id = db.Column(db.String(100), db.ForeignKey('user.google_id'), nullable=True)
     category_id= db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
     status= db.Column(db.String(20), nullable=True)

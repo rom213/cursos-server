@@ -4,12 +4,13 @@ from datetime import datetime
 
 class PaymentModel(Payment):
     
-    def __init__(self, signature, google_id, category_id, status, is_refer=False):
+    def __init__(self, signature, price ,google_id, category_id, status, is_refer=False):
         self.signature = signature
         self.google_id = google_id
         self.category_id = category_id
         self.status = status
         self.is_refer = is_refer
+        self.price= price
         self.created_at = datetime.utcnow()
 
     def save(self):
