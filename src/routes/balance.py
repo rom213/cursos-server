@@ -42,7 +42,8 @@ def all_categories():
             "count": summary["counts"],
             "non_refunded_value": summary["non_refunded_value"],
             "refunded_value": summary["refunded_value"],
-            "total_value": summary["total_value"]
+            "total_value_all_refunds": summary["total_value"],
+            "courses_payments_value": summary["courses_payments_value"]
         }), 200
 
     except Exception as e:

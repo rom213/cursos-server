@@ -6,6 +6,7 @@ from .category import category_bp
 from .account import account_bp
 from .refund import refund_bp
 from .balance import balance_bp
+from .sail import sail_bp
 # from .home import home_bp
 # from .sockets import sokets_bp, register_socketio_events
 
@@ -19,6 +20,7 @@ def init_app(app):
     app.register_blueprint(account_bp, url_prefix='/account')
     app.register_blueprint(refund_bp, url_prefix='/api')
     app.register_blueprint(balance_bp, url_prefix='/api')
+    app.register_blueprint(sail_bp, url_prefix='/api')
 
     # app.register_blueprint(group_messages_bp, url_prefix='/groupMessages')
     # app.register_blueprint(messages_bp, url_prefix='/messages')

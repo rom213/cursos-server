@@ -12,12 +12,13 @@ def serialize_refer(refer):
         return {
             "refund_id": refer.refund.id,
             "type_acc_em": refer.refund.type_acc_em.value,
+            "porcetage_refund":refer.porcentage,
             "titular_acc_em": refer.refund.titular_acc_em,
             "number_acc_em": refer.refund.number_acc_em,
             "type_acc_re": refer.refund.type_acc_re.value,
             "titular_acc_res": refer.refund.titular_acc_em,
             "number_acc_res": refer.refund.number_acc_em,
-            "value": refer.refund.value,
+            "value": refer.value,
             "image": refer.refund.image,
             "created_at": refer.refund.created_at.isoformat(),
             "refer_id": refer.id,
@@ -39,7 +40,6 @@ def get_refunds_by_user_and_date():
 
     user_google_id = session["user"]["google_id"]
 
-    print(user_google_id)
     if not all([date_init, date_end]):
         return jsonify({"error": "Faltan parámetros requeridos"}), 400
 
@@ -50,8 +50,7 @@ def get_refunds_by_user_and_date():
         return jsonify({"error": "Fechas inválidas. Usa formato YYYY-MM-DD"}), 400
 
     results = refund_model.RefundQueryService.get_by_user_and_date(user_google_id, dt_init, dt_end)
-
-
+    print(results)
     return jsonify([serialize_refer(ref) for ref in results]), 200
 
 

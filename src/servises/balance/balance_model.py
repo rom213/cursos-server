@@ -1,5 +1,6 @@
 from flask import session
 from models.Refer import Refer
+from models.Payment import Payment
 from sqlalchemy import and_
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,7 +19,7 @@ class BalanceModel:
 
         # Obtengo todos los registros para ese usuario y rango de fechas
         refers = (
-            Refer.query
+            Refer.query.join(Payment, Payment.id == Refer.payment_id)
             .filter(
                 Refer.google_id == google_id,
                 Refer.created_at >= date_init,
@@ -32,12 +33,14 @@ class BalanceModel:
         courses_value_sells = 0
         courses_value_sells_refunds = 0
         courses_value_sells_not_refunds = 0
+        courses_payments_value=0
 
         # Recorro y voy acumulando
         for item in refers:
             value = int(item.value or 0)  # aseguro que sea entero
             courses_sells_count += 1
             courses_value_sells += value
+            courses_payments_value+=int(item.payment.price)
 
             if item.refund_id is not None:
                 courses_value_sells_refunds += value
@@ -49,7 +52,8 @@ class BalanceModel:
             "counts":courses_sells_count,
             "total_value":courses_value_sells,
             "refunded_value":courses_value_sells_refunds,
-            "non_refunded_value":courses_value_sells_not_refunds
+            "non_refunded_value":courses_value_sells_not_refunds,
+            "courses_payments_value":courses_payments_value
             }
         
 

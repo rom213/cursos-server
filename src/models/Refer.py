@@ -12,6 +12,7 @@ class Refer(db.Model):
     
     # Relación: un Refer está asociado a un Refund (opcional)
     refund = db.relationship("Refund", backref="refers", lazy=True)
+    payment = db.relationship("Payment", backref="payments", lazy=True)
 
     is_pay = db.Column(db.Boolean, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

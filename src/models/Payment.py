@@ -12,3 +12,5 @@ class Payment(db.Model):
     status= db.Column(db.String(20), nullable=True)
     is_refer = db.Column(db.Boolean, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    category = db.relationship("Category", backref="categories", lazy=True)

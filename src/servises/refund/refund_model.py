@@ -17,7 +17,7 @@ class RefundQueryService:
         """trae los reembolsos desde refer segun el atributo google_id, refund segun la fecha de reembolso"""
         return Refer.query.join(Refund, Refund.id == Refer.refund_id) \
              .join(Payment, Payment.id== Refer.payment_id)\
-            .filter(Payment.google_id == google_id) \
+            .filter(Refer.google_id == google_id) \
             .filter(Refund.created_at >= date_init) \
             .filter(Refund.created_at <= date_end) \
             .all()
