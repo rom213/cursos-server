@@ -7,23 +7,29 @@ access_token = "ya29.c.c0ASRK0GYZJ2jJUrUi1oIUBVH7Z_cDHJsQNB0M_WGETPhcC8IvsQcqgeH
 token_lock = threading.Lock()
 
 def generate_token():
-    global access_token  # Asegurar que estamos modificando la variable global
-    credentials = service_account.Credentials.from_service_account_file(
-        'src/credentials.json',
-        scopes=['https://www.googleapis.com/auth/admin.directory.group']
-    )
-    request = google.auth.transport.requests.Request()
-    credentials.refresh(request)    
-    
+    try:
+        global access_token  # Asegurar que estamos modificando la variable global
 
-    access_token = credentials.token
-    
-    return access_token
+        credentials = service_account.Credentials.from_service_account_file(
+            r'c:\Users\ASUS\Documents\Romario\work\cursos estudia y trabaja\cursos-server\src\credentials.json',
+            scopes=['https://www.googleapis.com/auth/admin.directory.group']
+        )
+        
+        request = google.auth.transport.requests.Request()
+        credentials.refresh(request)    
+        
 
+        access_token = credentials.token
+        
+        return access_token
+    except Exception as e:
+        print("❌ Error leyendo credentials.json:", e)
+        raise
 def get_access_token():
     """Obtiene el token actual o genera uno nuevo si es necesario"""
     global access_token
     with token_lock:
         if not access_token:
             access_token = generate_token()
+        print(access_token)
         return access_token

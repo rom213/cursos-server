@@ -177,6 +177,8 @@ class GroupRepository:
             payment = PaymentService.process_payment(user.google_id, data, is_refer)
 
             result = getattr(repo, method_name)()
+
+
             payment.status = "SUCCESS" if result else "ERROR"
             payment.save()
 
@@ -234,19 +236,17 @@ class PaymentService:
     @staticmethod
     def process_payment(user_google_id, data, is_refer):
         cat = CategoryModel.get_by_id(data.get("category_id"))
-
         # lo usamos para atrapar errores y evitar el no registro de una compra
-        
+        values=None
         try:
             if is_refer:
                 values=cat.calc_price(True, False)
             else:
                 is_first_bought = not  UserModel.is_bought(google_id=data.get("google_id"))
-                values.calc_price(is_first_bought, False)
+                values= cat.calc_price(is_first_bought, False)
         except Exception as e:
             print(e)
-        
-        
+
         payment = PaymentModel(
             status="ERROR",
             price=values.get("precio_final"),
@@ -255,8 +255,6 @@ class PaymentService:
             signature=data.get("reference_code"),
             google_id=user_google_id
         )
-
         if not payment.verify():
             raise PermissionError("Pago no verificado")
-
         return payment

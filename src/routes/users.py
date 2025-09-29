@@ -114,15 +114,16 @@ def verify_token():
     
 
     accounts = [acc.to_dict() for acc in result["user_data"].accounts]
+    num_whatsapp = getattr(result["user_data"], "num_whatsapp", "") or ""
 
     session["user"] = {
         "google_id": result["user_data"].google_id,
         "accounts": accounts,
         "email": result["user_data"].email,
-        "num_whatsapp": result["user_data"].num_whatsapp.split()[1],
+        "prefix": num_whatsapp.split()[0] if num_whatsapp and len(num_whatsapp.split()) > 0 else "+57",
+        "num_whatsapp": num_whatsapp.split()[1] if num_whatsapp and len(num_whatsapp.split()) > 1 else "",
         "name": result["user_data"].name,
         "given_name": result["user_data"].name.split()[0],
-        "prefix":result["user_data"].num_whatsapp.split()[0],
         "picture": result["user_data"].picture,
         "is_bought": UserModel.is_bought(google_id=result["user_data"].google_id)
     }
@@ -153,15 +154,16 @@ def profile():
     
     
     accounts = [acc.to_dict() for acc in user.accounts]
-
+    num_whatsapp = user.num_whatsapp or ""
+    
     session["user"] = {
         "google_id": user.google_id,
         "accounts": accounts,
         "email": user.email,
-        "num_whatsapp":user.num_whatsapp.split()[1],
+        "num_whatsapp": num_whatsapp.split()[0] if num_whatsapp and len(num_whatsapp.split()) > 0 else "",
         "name": user.name,
         "given_name": user.name.split()[0],
-        "prefix":user.num_whatsapp.split()[0],
+        "prefix":num_whatsapp.split()[1] if num_whatsapp and len(num_whatsapp.split()) > 1 else "+57",
         "picture": user.picture,
         "is_bought": UserModel.is_bought(google_id=user.google_id)
     }
