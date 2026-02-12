@@ -1,14 +1,12 @@
-# extensions.py
 from flask_mysqldb import MySQL
 from flask import current_app
+from flask_mail import Mail
 from itsdangerous import URLSafeTimedSerializer
 
 # Crear instancias de las extensiones
 
 mysql = MySQL()
-
-
-
+mail = Mail()
 
 def get_serializer():
     return URLSafeTimedSerializer(

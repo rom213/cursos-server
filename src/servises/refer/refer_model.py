@@ -76,7 +76,7 @@ class ReferModel(Refer):
             'id': self.id,
             'google_id': self.google_id,
             'payment_id': self.payment_id,
-            'status': self.status,
+            'value': self.value,
             'refund': self.refund,
             'is_pay': self.is_pay,
             'created_at': self.created_at.isoformat() if self.created_at else None

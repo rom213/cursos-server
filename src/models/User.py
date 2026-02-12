@@ -6,6 +6,14 @@ from datetime import datetime
 
 
 
+import enum
+
+class TipoUsuario(enum.Enum):
+    NUEVO = "nuevo"
+    VENDEDOR = "vendedor"
+    CUPON = "cupon"
+
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     google_id = db.Column(db.String(100), nullable=False, unique=True)
@@ -16,7 +24,11 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     num_whatsapp= db.Column(db.String(20), nullable=True)
     delete_at = db.Column(db.DateTime,  nullable=True)
-    
+
+    codigo_referido = db.Column(db.String(100), nullable=True, unique=True)
+    descuento_referido = db.Column(db.Float, default=0.0)
+    tipo_usuario = db.Column(db.Enum(TipoUsuario), default=TipoUsuario.NUEVO, nullable=True)
+
     accounts = db.relationship('Account', backref='user', lazy=True)
 
     def __init__(self, google_id, email, name, picture, rol="user"):
@@ -30,6 +42,7 @@ class User(db.Model):
         return {
             "id": self.id,
             "google_id": self.google_id,
+            "codigo_referido": self.codigo_referido,
             "email": self.email,
             "num_whatsapp":self.num_whatsapp,
             "rol": self.rol,

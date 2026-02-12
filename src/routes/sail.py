@@ -11,15 +11,22 @@ sail_bp = Blueprint("sail", __name__)
 
 def serialize_refer(refer):
         return {
-            "porcetage_refund":refer.porcentage,
+            "porcetage_refund": refer.porcentage,
             "affiliaty": "manual",
             "category_bought": refer.payment.category.titulo,
             "category_price": refer.payment.price,
             "refund_price": refer.value,
             "created_at": refer.created_at,
-            "is_refund": refer.refund_id is not None,
+            
+            # --- CAMBIOS AQUÍ ---
+            # Comprueba si el objeto 'refund' existe
+            "is_refund": refer.refund is not None, 
             "refer_id": refer.id,
-            "baucher_image": refer.refund.image
+            
+            # Asigna la imagen SÓLO SI 'refer.refund' no es None,
+            # de lo contrario, asigna None.
+            "baucher_image": refer.refund.image if refer.refund else None
+            # --- FIN DE CAMBIOS ---
         }
 
 
@@ -31,11 +38,10 @@ def get_refunds_by_user_and_date():
     date_end = request.args.get("date_end")
 
 
-    # if "user" not in session:
-    #     return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
+    if "user" not in session:
+        return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
 
-    # user_google_id = session["user"]["google_id"]
-    user_google_id = 118070327157829661695
+    user_google_id = session["user"]["google_id"]
 
     if not all([date_init, date_end]):
         return jsonify({"error": "Faltan parámetros requeridos"}), 400
@@ -47,4 +53,5 @@ def get_refunds_by_user_and_date():
         return jsonify({"error": "Fechas inválidas. Usa formato YYYY-MM-DD"}), 400
 
     results = ReferQueryService.get_by_user_and_date(user_google_id, dt_init, dt_end)
+    
     return jsonify([serialize_refer(ref) for ref in results]), 200

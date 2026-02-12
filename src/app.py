@@ -5,11 +5,11 @@ from google.auth.transport import requests as google_requests
 from models import db
 from config import config
 from routes import init_app
-from extensions import mysql
+from extensions import mysql, mail
 
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": ["http://localhost:3001", "http://localhost:5173"]}}, supports_credentials=True)
 
 # 🔹 Primero carga la configuración
 app.config.from_object(config["development"])
@@ -17,6 +17,7 @@ app.config.from_object(config["development"])
 # 🔹 Luego inicializa las extensiones con la configuración ya cargada
 db.init_app(app)
 mysql.init_app(app)
+mail.init_app(app)
 
 # Inicializar rutas
 init_app(app)

@@ -60,6 +60,8 @@ class CategoryModel(Category):
     @classmethod
     def get_by_id(cls, category_id):
         """Recupera una instancia de CategoryModel por su ID."""
+        if not category_id:
+            return None
         return cls.query.get(category_id)
     
     @classmethod
@@ -159,7 +161,6 @@ class CategoryModel(Category):
     def to_dict(self):
         """Convierte la instancia en un diccionario para facilitar la serialización."""
 
-        values=self.generate_firm_payu() 
         return {
             'id': self.id,
             'titulo':self.titulo,
@@ -169,10 +170,7 @@ class CategoryModel(Category):
             'imagen_url': self.imagen_url,
             'num_per': self.num_per,
             'descuento': self.descuento,
-            'signature': values.get('signature'),
-            'reference_code': values.get('reference_code'),
             'precio': self.precio,
-            'precio_desc':values.get('precios_des'),
             'duracion': self.duracion,
             'user_bought': self.user_is_bought(),
             'user_comment': self.user_is_comment(),

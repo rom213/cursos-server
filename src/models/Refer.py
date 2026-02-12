@@ -7,7 +7,7 @@ class Refer(db.Model):
     google_id = db.Column(db.String(100), db.ForeignKey('user.google_id'), nullable=False)
     porcentage = db.Column(db.String(100), nullable=False)
     payment_id = db.Column(db.Integer, db.ForeignKey('payment.id'), nullable=True)
-    refund_id = db.Column(db.Integer, db.ForeignKey('refund.id'), nullable=True, unique=True)
+    refund_id = db.Column(db.Integer, db.ForeignKey('refund.id'), nullable=True)
     value = db.Column(db.String(100), nullable=False)
     
     # Relación: un Refer está asociado a un Refund (opcional)

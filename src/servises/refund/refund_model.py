@@ -5,8 +5,13 @@ from typing import List
 from PIL import Image, UnidentifiedImageError
 from models import db
 from models.Refer import Refer
+from models.User import User
 from models.Refund import Refund
 from models.Payment import Payment
+from datetime import datetime
+from sqlalchemy import or_, func
+from typing import List, Dict, Any
+
 
 # -------------------------------
 # SRP: Consulta especializada
@@ -21,11 +26,90 @@ class RefundQueryService:
             .filter(Refund.created_at >= date_init) \
             .filter(Refund.created_at <= date_end) \
             .all()
+            
+    @classmethod
+    def search_refunds(cls, date_init: datetime, date_end: datetime, search_term: str = None, 
+                      page: int = 1, per_page: int = 10) -> Dict[str, Any]:
+        """
+        Busca reembolsos por fecha y término de búsqueda con paginación
+        
+        Args:
+            date_init: Fecha de inicio
+            date_end: Fecha de fin
+            search_term: Término de búsqueda (opcional)
+            page: Número de página
+            per_page: Elementos por página
+            
+        Returns:
+            Dict con records, total, pages, current_page, per_page
+        """
+        query = Refund.query \
+            .join(Refer, Refer.refund_id == Refund.id) \
+            .join(Payment, Payment.id == Refer.payment_id) \
+            .join(User, User.google_id == Refer.google_id) \
+            .filter(Refund.created_at >= date_init) \
+            .filter(Refund.created_at <= date_end)
+        
+        # Aplicar búsqueda si existe término
+        if search_term and search_term.strip():
+            search_pattern = f"%{search_term.strip()}%"
+            query = query.filter(
+                or_(
+                    Refer.google_id.ilike(search_pattern),
+                    User.name.ilike(search_pattern),
+                    User.email.ilike(search_pattern),
+                    func.cast(Refund.value, db.String).ilike(search_pattern),
+                    func.cast(Refer.value, db.String).ilike(search_pattern)
+                )
+            )
+        
+        # Ordenar por fecha descendente (más recientes primero)
+        query = query.distinct().order_by(Refund.created_at.desc())
+        
+        # Aplicar paginación
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        return {
+            "records": pagination.items,
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "current_page": pagination.page,
+            "per_page": pagination.per_page,
+            "has_next": pagination.has_next,
+            "has_prev": pagination.has_prev
+        }
+        
+    @classmethod
+    def get_refund_date(cls, date_init, date_end)-> List[Refer]:
+        """trae los reembolsos desde refer  segun la fecha de reembolso"""
+        return Refer.query.join(Refund, Refund.id == Refer.refund_id) \
+             .join(Payment, Payment.id== Refer.payment_id)\
+            .filter(Refund.created_at >= date_init) \
+            .filter(Refund.created_at <= date_end) \
+            .all()
+            
+            
+    @classmethod      
+    def get_refunds_by_google_id(cls, google_id, date_init, date_end) -> List[Refer]:
+        return Refer.query.join(Refund, Refund.id == Refer.refund_id) \
+            .join(Payment, Payment.id == Refer.payment_id) \
+            .filter(Refer.google_id == google_id) \
+            .filter(Refer.created_at >= date_init) \
+            .filter(Refer.created_at <= date_end) \
+            .all()
+            
+    @classmethod      
+    def get_refund_by_id(cls, refund_id) -> List[Refer]:
+        return Refer.query.join(Refund, Refund.id == Refer.refund_id) \
+            .join(Payment, Payment.id == Refer.payment_id) \
+            .filter(Refund.id== refund_id) \
+            .all()
 
 
-# -------------------------------
-# SRP + DIP: Interfaz para almacenamiento
-# -------------------------------
 class IRefundRepository(ABC):
     @abstractmethod
     def save(self, refund: Refund):
@@ -38,9 +122,6 @@ class RefundRepository(IRefundRepository):
         db.session.commit()
 
 
-# -------------------------------
-# SRP + ISP: Lógica de entidad con uso del repositorio
-# -------------------------------
 class RefundCreator:
     def __init__(self, repository: IRefundRepository):
         self.repository = repository
@@ -51,9 +132,6 @@ class RefundCreator:
         return refund
 
 
-# -------------------------------
-# SRP + OCP: Interfaz para imagen
-# -------------------------------
 class IImageValidator(ABC):
     @abstractmethod
     def is_valid(self, image_input) -> bool:
@@ -76,9 +154,6 @@ class PILImageValidator(IImageValidator):
         return False
 
 
-# -------------------------------
-# SRP + DIP: Clase para guardar imágenes
-# -------------------------------
 class ImageStorageService:
     def __init__(self, image_input, validator: IImageValidator):
         self._img = image_input

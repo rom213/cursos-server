@@ -242,8 +242,7 @@ class PaymentService:
             if is_refer:
                 values=cat.calc_price(True, False)
             else:
-                is_first_bought = not  UserModel.is_bought(google_id=data.get("google_id"))
-                values= cat.calc_price(is_first_bought, False)
+                values= cat.calc_price(False, False)
         except Exception as e:
             print(e)
 
