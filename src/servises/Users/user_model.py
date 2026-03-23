@@ -1,4 +1,4 @@
-from models.User import User
+from models.User import User, TipoUsuario
 from models import db
 from servises.payment.payment_model import PaymentModel
 from datetime import datetime
@@ -32,9 +32,12 @@ class UserModel(User):
         return UserModel.query.join(Account, UserModel.google_id == Account.google_id).filter(UserModel.google_id == google_id).first()
     
     @staticmethod
-    def is_bought(google_id):
-        """Obtiene un usuario por su Google ID."""
-        return PaymentModel.query.filter(PaymentModel.google_id == google_id).first() is not None
+    def is_vendedor(google_id: str) -> bool:
+        """Verifica si un usuario con el Google ID dado está registrado como vendedor."""
+        return UserModel.query.filter_by(
+            google_id=google_id, 
+            tipo_usuario=TipoUsuario.VENDEDOR
+        ).first() is not None
     
     @staticmethod
     def get_by_email(email):

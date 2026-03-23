@@ -23,6 +23,7 @@ class User(db.Model):
     picture = db.Column(db.String(200), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     num_whatsapp= db.Column(db.String(20), nullable=True)
+    country = db.Column(db.String(20), nullable=True)
     delete_at = db.Column(db.DateTime,  nullable=True)
 
     codigo_referido = db.Column(db.String(100), nullable=True, unique=True)
@@ -31,12 +32,13 @@ class User(db.Model):
 
     accounts = db.relationship('Account', backref='user', lazy=True)
 
-    def __init__(self, google_id, email, name, picture, rol="user"):
+    def __init__(self, google_id, email, name, picture, rol="user", country=None):
         self.google_id=google_id
         self.email=email
         self.rol=rol
         self.name=name
         self.picture=picture
+        self.country=country
 
     def to_dict(self):
         return {
@@ -44,6 +46,7 @@ class User(db.Model):
             "google_id": self.google_id,
             "codigo_referido": self.codigo_referido,
             "email": self.email,
+            "country": self.country,
             "num_whatsapp":self.num_whatsapp,
             "rol": self.rol,
             "name": self.name,

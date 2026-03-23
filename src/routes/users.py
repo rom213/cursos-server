@@ -6,14 +6,39 @@ import subprocess
 from config import config
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+import requests
 from models.User import User, db
 from abc import ABC, abstractmethod
 from servises.Users.user_model import UserModel
 from models.account import Account
 import uuid
+from models.SystemVariable import SystemVariable
 
 
 # 1. Repository Pattern -----------------------------------------------------------------
+
+def where_is_my_ip():
+    if request.headers.getlist("X-Forwarded-For"):
+        ip_address = request.headers.getlist("X-Forwarded-For")[0]
+    else:
+        ip_address = request.remote_addr
+    return ip_address
+
+def who_is_my_country(ip_address):
+    country = None
+    try:
+        if ip_address:
+            # IP DE VENEZUELA 186.24.0.0
+            # IP DE COLOMBIA 24.152.58.172
+             response = requests.get(f"https://ipinfo.io/24.152.58.172/json")
+             if response.status_code == 200:
+                 data = response.json()
+                 country = data.get("country")
+    except Exception as e:
+        print(f"Error getting country from IP: {e}")
+    
+    return country
+
 class UserRepository:
     @staticmethod
     def get_by_google_id(google_id: str) -> User:
@@ -28,12 +53,13 @@ class UserRepository:
 
 
     @staticmethod
-    def create_google_user(user_data: dict) -> User:
+    def create_google_user(user_data: dict, country: str = None) -> User:
         new_user = User(
             google_id=user_data["user_id"],
             email=user_data["email"],
             name=user_data["name"],
-            picture=user_data["picture"]
+            picture=user_data["picture"],
+            country=country
         )
         db.session.add(new_user)
         db.session.commit()
@@ -103,10 +129,13 @@ class AuthService:
                 
 
             is_new_user = False
+            country = who_is_my_country(where_is_my_ip())
             if not user:
-                user = self.user_repository.create_google_user(user_data)
+                user = self.user_repository.create_google_user(user_data, country)
                 is_new_user = True
-
+            elif user.country != country:
+                user.country = country
+                db.session.commit()   
 
             return {
                 "user_data": user,
@@ -194,6 +223,7 @@ auth_service = AuthService(google_verifier, user_repository)
 users_bp = Blueprint("users", __name__)
 
 
+
 @users_bp.route("/verify-token", methods=["POST"])
 def verify_token():
     token = request.json.get("token")
@@ -201,14 +231,21 @@ def verify_token():
     if not token:
         return jsonify({"success": False, "error": "Token missing"}), 400
 
+    # Get IP address
+    
+
+
     result, success = auth_service.authenticate(token)
     # print(result["user_data"].accounts[0].name_acc)
     if not success:
         return jsonify({"success": False, "error": result["error"]}), 401
     
+    print(result["user_data"].country)
 
     accounts = [acc.to_dict() for acc in result["user_data"].accounts]
     num_whatsapp = getattr(result["user_data"], "num_whatsapp", "") or ""
+
+    tasa_de_cambio = SystemVariable.query.filter_by(campo_codigo="CAMBIO_DOLAR").first()
 
     session["user"] = {
         "google_id": result["user_data"].google_id,
@@ -219,7 +256,9 @@ def verify_token():
         "name": result["user_data"].name,
         "given_name": result["user_data"].name.split()[0],
         "picture": result["user_data"].picture,
-        "is_bought": UserModel.is_bought(google_id=result["user_data"].google_id)
+        "is_bought": UserModel.is_vendedor(google_id=result["user_data"].google_id),
+        "country": result["user_data"].country,
+        "tasa_de_cambio": tasa_de_cambio.dato or 3800,
     }
 
     return jsonify({
@@ -242,7 +281,7 @@ def profile():
 
     # verifica si hay seccion y actualiza cualquier novedad en el usuario
     if "user" not in session:
-        return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
+        return jsonify({"success": False, "error": "No ha iniciado sesión  222"}), 401
     
     user = user_repository.get_by_google_id(session["user"]["google_id"])
     
@@ -250,7 +289,7 @@ def profile():
         return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
     accounts = [acc.to_dict() for acc in user.accounts]
     num_whatsapp = user.num_whatsapp or ""
-    
+    tasa_de_cambio = SystemVariable.query.filter_by(campo_codigo="CAMBIO_DOLAR").first()
     session["user"] = {
         "google_id": user.google_id,
         "accounts": accounts,
@@ -260,7 +299,9 @@ def profile():
         "given_name": user.name.split()[0],
         "prefix":num_whatsapp.split()[1] if num_whatsapp and len(num_whatsapp.split()) > 1 else "+57",
         "picture": user.picture,
-        "is_bought": UserModel.is_bought(google_id=user.google_id)
+        "is_bought": UserModel.is_vendedor(google_id=user.google_id),
+        "country": user.country,
+        "tasa_de_cambio": tasa_de_cambio.dato or 3800,
     }
 
     return jsonify({
@@ -284,7 +325,7 @@ def user_by_google_id_afiliaty(googleid):
     print(googleid)
     print(session["user"].get("is_bought")) 
     user = UserModel.get_by_google_id(googleid)
-    is_bought = UserModel.is_bought(googleid)
+    is_bought = UserModel.is_vendedor(googleid)
 
     if not is_bought:
         return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
