@@ -10,6 +10,7 @@ from models.Payment import Payment
 from models.Message import Message
 from flask import session
 from servises.payment.payment_repository import PaymentRespository
+from models.SystemVariable import SystemVariable
 
 
 load_dotenv()
@@ -60,7 +61,22 @@ class CategoryModel(Category):
     @classmethod
     def get_by_id(cls, category_id):
         """Recupera una instancia de CategoryModel por su ID."""
+        if not category_id:
+            return None
         return cls.query.get(category_id)
+    
+    @classmethod
+    def search_by_title(cls, search_term, limit=None):
+        """
+        Retorna una lista de categorías cuyo título contiene el término de búsqueda (case-insensitive).
+        :param search_term: Cadena para buscar dentro del título.
+        :param limit: Número máximo de resultados a devolver (opcional).
+        :return: Lista de instancias CategoryModel.
+        """
+        query = cls.query.filter(cls.titulo.ilike(f"%{search_term}%"))
+        if limit:
+            return query.limit(limit).all()
+        return query.all()
     
     def user_is_bought(self):
         if "user" not in session:
@@ -90,34 +106,163 @@ class CategoryModel(Category):
         ).first() is not None
     
 
-    def calc_price(self, is_middle_price):
-        is_bought=self.user_is_any_bougth()
-        self.descuento_total_price = round(float(self.precio) - (float(self.precio) * (float(self.descuento) / 100)))
+    def calcular_precio_con_descuento(self, precio, descuento_porcentaje):
+        """Calcula el precio final aplicando un descuento en porcentaje."""
+        factor_descuento = float(descuento_porcentaje) / 100
+        precio_final = float(precio) * (1 - factor_descuento)
+        return round(precio_final)
 
-        if  is_bought:
-            self.descuento_total_price = round(self.descuento_total_price * 0.5)
-            descuento_total = (1 - (self.descuento_total_price / float(self.precio))) * 100
-            self.descuento = descuento_total
-            return
+    def calcular_porcentaje_efectivo(self, precio_original, precio_final):
+        if float(precio_original) == 0:
+            return 0  # Evitar división por cero
+        
+        porcentaje = (1 - (float(precio_final) / float(precio_original))) * 100
+        return porcentaje
 
-        if not is_bought and not is_middle_price:
-            self.descuento_total_price = round(self.descuento_total_price * 0.5)
-            descuento_total = (1 - (self.descuento_total_price / float(self.precio))) * 100
-            self.descuento = descuento_total
+    # Versión corregida de calc_price
+    def calc_price(self, descuento=0):
+        """
+        Calcula el precio final y el descuento efectivo, retornando los valores
+        sin modificar el estado del objeto.
+        """
+
+        # 1. Calcula el precio con el descuento inicial de la categoría
+        precio_descontado = self.calcular_precio_con_descuento(self.precio, self.descuento)
+        
+        precio_final = 0
+        descuento_aplicado = self.descuento # Por defecto, es el de la categoría
+
+        # 2. Decide si se aplica el descuento adicional del 50%
+        precio_final = precio_descontado - (precio_descontado * descuento / 100)
+        descuento_aplicado = self.calcular_porcentaje_efectivo(self.precio, precio_final)
+        
+        # Retorna un diccionario con los resultados del cálculo
+        return {
+            'precio_final': precio_final,
+            'descuento_aplicado': descuento_aplicado
+        }
 
 
 
-    def generate_firm_payu(self):
+    def get_aggregated_plataformas(self):
+        if not self.related_categories:
+            return {}
+        
+        plataformas_map = {}
+        for rc in self.related_categories:
+            if not rc.seccion_plataformas:
+                continue
+            plats = rc.seccion_plataformas.get("plataformas", [])
+            for p in plats:
+                titulo = p.get("titulo_plataforma")
+                if not titulo:
+                    continue
+                if titulo not in plataformas_map:
+                    plataformas_map[titulo] = {
+                        "titulo_plataforma": titulo,
+                        "imagen_url": p.get("imagen_url", ""),
+                        "url_plataforma_seleccionada": p.get("url_plataforma_seleccionada", ""),
+                        "cursos": [],
+                        "cantidad_cursos_plataforma": 0
+                    }
+                plataformas_map[titulo]["cursos"].extend(p.get("cursos", []))
+                
+        # Update counts
+        result_plataformas = []
+        for p in plataformas_map.values():
+            p["cantidad_cursos_plataforma"] = len(p["cursos"])
+            result_plataformas.append(p)
+            
+        if not result_plataformas:
+            return {}
+            
+        return {
+            "plataformas": result_plataformas,
+            "cantidad_plataformas": len(result_plataformas)
+        }
 
-        self.calc_price(is_middle_price=True)
-        repo= PaymentRespository(price=self.descuento_total_price)
-        repo.generate_firm()
-        return {'signature':repo.signature, "reference_code": repo.reference_code, 'precios_des':self.descuento_total_price}
+    def get_aggregated_temas(self):
+        if not self.related_categories:
+            return {}
+            
+        temas_map = {}
+        for rc in self.related_categories:
+            if not rc.seccion_temas:
+                continue
+            temas = rc.seccion_temas.get("temas", [])
+            for t in temas:
+                titulo = t.get("titulo_tema")
+                if not titulo:
+                    continue
+                if titulo not in temas_map:
+                    temas_map[titulo] = {
+                        "titulo_tema": titulo,
+                        "imagen_url": t.get("imagen_url", ""),
+                        "url_tema_seleccionado": t.get("url_tema_seleccionado", ""),
+                        "cursos": [],
+                        "cantidad_cursos_tema": 0
+                    }
+                temas_map[titulo]["cursos"].extend(t.get("cursos", []))
+                
+        result_temas = []
+        for t in temas_map.values():
+            t["cantidad_cursos_tema"] = len(t["cursos"])
+            result_temas.append(t)
+            
+        if not result_temas:
+            return {}
+            
+        return {
+            "temas": result_temas,
+            "cantidad_temas": len(result_temas)
+        }
 
-    def to_dict(self):
+    def get_aggregated_lista_completa(self):
+        if not self.related_categories:
+            return {}
+            
+        all_cursos = []
+        for rc in self.related_categories:
+            if not rc.seccion_lista_completa:
+                continue
+            cursos = rc.seccion_lista_completa.get("lista_completa", [])
+            all_cursos.extend(cursos)
+            
+        if not all_cursos:
+            return {}
+            
+        return {
+            "lista_completa": all_cursos,
+            "cantidad_cursos": len(all_cursos)
+        }
+
+    def to_dict(self, light=False):
         """Convierte la instancia en un diccionario para facilitar la serialización."""
 
-        values=self.generate_firm_payu() 
+        user_country = (session.get("user", {}).get("country") or "").upper()
+        cambio_dolar_raw = SystemVariable.query.filter_by(campo_codigo="CAMBIO_DOLAR").first()
+        try:
+            cambio_dolar = float(cambio_dolar_raw.dato) if cambio_dolar_raw and cambio_dolar_raw.dato else 1.0
+        except (TypeError, ValueError):
+            cambio_dolar = 1.0
+            
+        if user_country == "CO":
+            precio = self.precio
+        else:
+            precio = self.precio / cambio_dolar if cambio_dolar else self.precio
+        if light:
+            plataformas = {}
+            temas = {}
+            lista_completa = {}
+            pregunta_respuesta = []
+            courses = []
+        else:
+            plataformas = self.seccion_plataformas if self.seccion_plataformas and self.seccion_plataformas.get('plataformas') else self.get_aggregated_plataformas()
+            temas = self.seccion_temas if self.seccion_temas and self.seccion_temas.get('temas') else self.get_aggregated_temas()
+            lista_completa = self.seccion_lista_completa if self.seccion_lista_completa and self.seccion_lista_completa.get('lista_completa') else self.get_aggregated_lista_completa()
+            pregunta_respuesta = self.pregunta_respuesta if self.pregunta_respuesta is not None else []
+            courses = [course.to_dict() for course in self.courses]
+
         return {
             'id': self.id,
             'titulo':self.titulo,
@@ -126,15 +271,17 @@ class CategoryModel(Category):
             'frase_2': self.frase_2,
             'imagen_url': self.imagen_url,
             'num_per': self.num_per,
+            'cat_rel': [category.id for category in self.related_categories],
+            'pregunta_respuesta': pregunta_respuesta,
+            'seccion_plataformas': plataformas,
+            'seccion_temas': temas,
+            'seccion_lista_completa': lista_completa,
             'descuento': self.descuento,
-            'signature': values.get('signature'),
-            'reference_code': values.get('reference_code'),
-            'precio': self.precio,
-            'precio_desc':values.get('precios_des'),
+            'precio': precio,
             'duracion': self.duracion,
             'user_bought': self.user_is_bought(),
             'user_comment': self.user_is_comment(),
-            'courses': [course.to_dict() for course in self.courses],
+            'courses': courses,
             'delete_at': self.delete_at.isoformat() if self.delete_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

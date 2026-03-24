@@ -1,7 +1,8 @@
-from models.User import User
+from models.User import User, TipoUsuario
 from models import db
 from servises.payment.payment_model import PaymentModel
 from datetime import datetime
+from models.account import Account
 
 
 class UserModel(User):
@@ -26,9 +27,17 @@ class UserModel(User):
         return UserModel.query.filter_by(google_id=google_id).first()
     
     @staticmethod
-    def is_bought(google_id):
+    def get_accounts_by_google_id(google_id):
         """Obtiene un usuario por su Google ID."""
-        return PaymentModel.query.filter(PaymentModel.google_id == google_id).first() is not None
+        return UserModel.query.join(Account, UserModel.google_id == Account.google_id).filter(UserModel.google_id == google_id).first()
+    
+    @staticmethod
+    def is_vendedor(google_id: str) -> bool:
+        """Verifica si un usuario con el Google ID dado está registrado como vendedor."""
+        return UserModel.query.filter_by(
+            google_id=google_id, 
+            tipo_usuario=TipoUsuario.VENDEDOR
+        ).first() is not None
     
     @staticmethod
     def get_by_email(email):
@@ -46,3 +55,13 @@ class UserModel(User):
     def get_all():
         """Obtiene todos los usuarios que no han sido eliminados."""
         return UserModel.query.filter_by(delete_at=None).all()
+    
+    @staticmethod
+    def validar_cupon(cupon):
+        """Verifica si existe un usuario con un google_id y código de referido específicos."""
+        # Usamos filter_by para una sintaxis más limpia con argumentos clave
+        user = UserModel.query.filter_by(
+            codigo_referido=cupon
+        ).first()
+        
+        return user

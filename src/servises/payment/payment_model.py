@@ -1,15 +1,26 @@
-from models.Payment import Payment
+from models.Payment import Payment, PaymentStatus
 from models import db
 from datetime import datetime
 
 class PaymentModel(Payment):
     
-    def __init__(self, signature, google_id, category_id, status, is_refer=False):
+    def __init__(
+        self,
+        signature,
+        price,
+        google_id,
+        category_id,
+        status: PaymentStatus,
+        info_error=None,
+        is_refer=False,
+    ):
         self.signature = signature
         self.google_id = google_id
         self.category_id = category_id
         self.status = status
         self.is_refer = is_refer
+        self.price= price
+        self.info_error = info_error
         self.created_at = datetime.utcnow()
 
     def save(self):
@@ -46,12 +57,17 @@ class PaymentModel(Payment):
 
     def to_dict(self):
         """Convierte la instancia en un diccionario para facilitar la serialización."""
+        status_val = (
+            self.status.value
+            if isinstance(self.status, PaymentStatus)
+            else self.status
+        )
         return {
             'id': self.id,
             'signature': self.signature,
             'google_id': self.google_id,
             'category_id': self.category_id,
-            'status': self.status,
+            'status': status_val,
             'is_refer': self.is_refer,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

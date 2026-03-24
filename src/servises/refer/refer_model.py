@@ -3,7 +3,9 @@ from models.Refer import Refer
 from models import db
 
 class ReferModel(Refer):
-    def __init__(self, google_id, payment_id="0", is_pay=False, refund=None):
+    def __init__(self, google_id, value, porcentage, payment_id="0", is_pay=False, refund=None):
+        self.value=value
+        self.porcentage=porcentage
         self.google_id = google_id
         self.payment_id = payment_id
         self.refund = refund
@@ -55,7 +57,7 @@ class ReferModel(Refer):
     def verify(self):
         """
         Verifica si ya existe un registro con el mismo google_id y payment_id.
-        Retorna True si existe, de lo contrario False.
+        Retorna True si existe, de lo contrario False. esto es para verificar compras
         """
         exists = Refer.query.filter(
             Refer.google_id == self.google_id,
@@ -74,7 +76,7 @@ class ReferModel(Refer):
             'id': self.id,
             'google_id': self.google_id,
             'payment_id': self.payment_id,
-            'status': self.status,
+            'value': self.value,
             'refund': self.refund,
             'is_pay': self.is_pay,
             'created_at': self.created_at.isoformat() if self.created_at else None
