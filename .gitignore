@@ -2,4 +2,26 @@ node_modules
 .venv
 __pycache__/
 *.py[cod]
+
+# Variables de entorno (secretos, DB, SMTP, API keys)
+.env
+.env.*
+!.env.example
+
+# Credenciales y tokens (Google, OAuth, etc.)
 credentials.json
+token.json
+*-credentials.json
+service-account*.json
+
+# Claves privadas
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+
+# Cobertura / cachés locales de herramientas
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/

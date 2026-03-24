@@ -159,15 +159,15 @@ class TestDeepSearchISO:
         data = json.loads(response.data)
         assert data == []
 
-    @patch("src.routes.category.db.session.query")
+    @patch("src.routes.category.CategoryModel")
+    @patch("src.routes.category.TiendaCourse")
     def test_deep_search_with_results(
-        self, mock_query_func, client
+        self, mock_tienda_course, mock_category_model, client
     ):
         """
         Atributo: Adecuación Funcional (Completitud)
         GET /deep-search?q=python debe buscar en título, nombre
-        y autor. Parcheamos todas las dependencias de SQLAlchemy
-        para evitar validaciones internas.
+        y autor. La ruta usa TiendaCourse.query (no db.session.query).
         """
         mock_course = MagicMock()
         mock_course.pilar_id = "1"
@@ -175,14 +175,18 @@ class TestDeepSearchISO:
         mock_course.autor = "Autor de prueba"
         mock_course.pack_nombre = "Pack Python"
         mock_course.pack_cantidad_cursos = 1
-        
+
         mock_query = MagicMock()
-        mock_query.outerjoin.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.distinct.return_value = mock_query
-        # db.session.query now returns tuples: (course, imagen_url)
-        mock_query.all.return_value = [(mock_course, "http://imagen.com")]
-        mock_query_func.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.all.return_value = [mock_course]
+        mock_tienda_course.query = mock_query
+
+        mock_categoria = MagicMock()
+        mock_categoria.imagen_url = "http://imagen.com"
+        mock_category_model.query.get.return_value = mock_categoria
 
         response = client.get(
             "/api/category/categories/deep-search?q=python&limit=5"
@@ -191,20 +195,21 @@ class TestDeepSearchISO:
         data = json.loads(response.data)
         assert len(data) >= 1
 
-    @patch("src.routes.category.db.session.query")
+    @patch("src.routes.category.TiendaCourse")
     def test_deep_search_no_results(
-        self, mock_query_func, client
+        self, mock_tienda_course, client
     ):
         """
         Atributo: Adecuación Funcional (Exactitud)
         Búsqueda que no coincide con nada debe retornar lista vacía.
         """
         mock_query = MagicMock()
-        mock_query.outerjoin.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.distinct.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
         mock_query.all.return_value = []
-        mock_query_func.return_value = mock_query
+        mock_tienda_course.query = mock_query
 
         response = client.get(
             "/api/category/categories/deep-search?q=xyz_no_existe"
