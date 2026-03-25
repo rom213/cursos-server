@@ -59,8 +59,8 @@ class TestAccountSecurityISO:
 class TestUpdateAccountISO:
     """Pruebas de adecuación funcional para actualización de cuentas."""
 
-    @patch("src.routes.account.UserModel")
-    @patch("src.routes.account.AccountRepository")
+    @patch("routes.account.UserModel")
+    @patch("routes.account.AccountRepository")
     def test_update_account_happy_path(
         self, mock_acc_repo, mock_user_model, authenticated_client
     ):
@@ -90,8 +90,8 @@ class TestUpdateAccountISO:
         data = response.json()
         assert data["status"] == "succes"
 
-    @patch("src.routes.account.UserModel")
-    @patch("src.routes.account.AccountRepository")
+    @patch("routes.account.UserModel")
+    @patch("routes.account.AccountRepository")
     def test_update_account_existing_accounts(
         self, mock_acc_repo, mock_user_model, authenticated_client
     ):
@@ -118,8 +118,8 @@ class TestUpdateAccountISO:
         )
         assert response.status_code == 200
 
-    @patch("src.routes.account.UserModel")
-    @patch("src.routes.account.AccountRepository")
+    @patch("routes.account.UserModel")
+    @patch("routes.account.AccountRepository")
     def test_update_account_null_values(
         self, mock_acc_repo, mock_user_model, authenticated_client
     ):

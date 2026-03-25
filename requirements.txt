@@ -21,8 +21,9 @@ requests==2.32.3
 # Email
 fastapi-mail==1.4.1
 
-# Google OAuth
+# Google OAuth / Directory API
 google-auth==2.36.0
+google-api-python-client==2.154.0
 
 # Payments (legacy SDK; migrate to REST+httpx gradually)
 paypalrestsdk==1.13.3

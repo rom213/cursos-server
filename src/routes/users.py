@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from sqlalchemy.orm import Session
@@ -129,7 +130,7 @@ class AuthService:
             if not user:
                 user = self.user_repository.create_google_user(user_data, country)
                 is_new_user = True
-            elif user.country != country:
+            elif country is not None and user.country != country:
                 user.country = country
                 db.session.commit()
 
@@ -314,13 +315,28 @@ def validate_email(
     body: dict = Body(...),
     db: Session = Depends(get_db),
 ):
+    _ = db
     email = body.get("email")
     if not email:
-        raise HTTPException(status_code=400, detail="Email is required")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "error",
+                "message": "Email is required",
+                "records": [],
+            },
+        )
 
     email_regex = r"^[a-zA-Z0-9._%+-]+@gmail\.com$"
     if not re.match(email_regex, email):
-        raise HTTPException(status_code=400, detail="Only Gmail addresses are allowed")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "error",
+                "message": "Only Gmail addresses are allowed",
+                "records": [],
+            },
+        )
 
     user = user_repository.get_by_email(email)
     if not user:

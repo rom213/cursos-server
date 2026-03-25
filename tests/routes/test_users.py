@@ -98,7 +98,7 @@ class TestVerifyTokenISO:
         )
         assert response.status_code == 400
 
-    @patch("src.routes.users.auth_service")
+    @patch("routes.users.auth_service")
     def test_verify_token_invalid_token(self, mock_auth, client):
         """
         Atributo: Fiabilidad (Madurez)
@@ -119,9 +119,9 @@ class TestVerifyTokenISO:
         data = response.json()
         assert data["success"] is False
 
-    @patch("src.routes.users.SystemVariable")
-    @patch("src.routes.users.UserModel")
-    @patch("src.routes.users.auth_service")
+    @patch("routes.users.SystemVariable")
+    @patch("routes.users.UserModel")
+    @patch("routes.users.auth_service")
     def test_verify_token_happy_path(
         self, mock_auth, mock_user_model, mock_sys_var, client
     ):
@@ -218,7 +218,7 @@ class TestValidateEmailISO:
         assert data["status"] == "error"
         assert "Gmail" in data["message"]
 
-    @patch("src.routes.users.user_repository")
+    @patch("routes.users.user_repository")
     def test_validate_email_creates_user(self, mock_repo, client):
         """
         Atributo: Adecuación Funcional (Completitud)
@@ -244,7 +244,7 @@ class TestValidateEmailISO:
         assert data["status"] == "success"
         assert len(data["records"]) == 1
 
-    @patch("src.routes.users.user_repository")
+    @patch("routes.users.user_repository")
     def test_validate_email_existing_user(self, mock_repo, client):
         """
         Atributo: Adecuación Funcional (Exactitud)
@@ -276,9 +276,9 @@ class TestValidateEmailISO:
 class TestProfileISO:
     """Pruebas de adecuación funcional para perfil de usuario."""
 
-    @patch("src.routes.users.SystemVariable")
-    @patch("src.routes.users.UserModel")
-    @patch("src.routes.users.user_repository")
+    @patch("routes.users.SystemVariable")
+    @patch("routes.users.UserModel")
+    @patch("routes.users.user_repository")
     def test_profile_returns_user_data(
         self, mock_repo, mock_user_model, mock_sys_var,
         authenticated_client
@@ -309,7 +309,7 @@ class TestProfileISO:
         data = response.json()
         assert data["success"] is True
 
-    @patch("src.routes.users.user_repository")
+    @patch("routes.users.user_repository")
     def test_profile_user_not_found(self, mock_repo, authenticated_client):
         """
         Atributo: Fiabilidad (Recuperabilidad)

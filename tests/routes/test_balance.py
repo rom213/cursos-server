@@ -51,7 +51,7 @@ class TestBalanceSecurityISO:
 class TestBalancePersonalISO:
     """Pruebas de adecuación funcional para balance personal."""
 
-    @patch("src.routes.balance.BalanceModel")
+    @patch("routes.balance.BalanceModel")
     def test_balance_personal_happy_path(
         self, mock_model, authenticated_client
     ):
@@ -77,7 +77,7 @@ class TestBalancePersonalISO:
         assert data["count"] == 5
         assert data["non_refunded_value"] == 250000
 
-    @patch("src.routes.balance.BalanceModel")
+    @patch("routes.balance.BalanceModel")
     def test_balance_personal_error(
         self, mock_model, authenticated_client
     ):
@@ -104,7 +104,7 @@ class TestBalancePersonalISO:
 class TestBalanceGlobalISO:
     """Pruebas para balance global administrativo."""
 
-    @patch("src.routes.balance.BalanceModel")
+    @patch("routes.balance.BalanceModel")
     def test_balance_global_happy_path(self, mock_model, client):
         """
         Atributo: Adecuación Funcional (Exactitud)
@@ -134,7 +134,7 @@ class TestBalanceGlobalISO:
 class TestBalanceByUserISO:
     """Pruebas para balance por usuario específico."""
 
-    @patch("src.routes.balance.BalanceModel")
+    @patch("routes.balance.BalanceModel")
     def test_balance_by_user_happy_path(self, mock_model, client):
         """
         Atributo: Adecuación Funcional (Exactitud)

@@ -31,7 +31,7 @@ from unittest.mock import patch, MagicMock
 class TestAllCategoriesISO:
     """Pruebas de adecuación funcional para listado de categorías."""
 
-    @patch("src.routes.category.CategoryModel")
+    @patch("routes.category.CategoryModel")
     def test_all_categories_default_pagination(
         self, mock_model, client
     ):
@@ -58,7 +58,7 @@ class TestAllCategoriesISO:
         assert isinstance(data, list)
         assert len(data) == 1
 
-    @patch("src.routes.category.CategoryModel")
+    @patch("routes.category.CategoryModel")
     def test_all_categories_custom_pagination(
         self, mock_model, client
     ):
@@ -79,7 +79,7 @@ class TestAllCategoriesISO:
         )
         assert response.status_code == 200
 
-    @patch("src.routes.category.CategoryModel")
+    @patch("routes.category.CategoryModel")
     def test_all_categories_empty_result(self, mock_model, client):
         """
         Atributo: Adecuación Funcional (Exactitud)
@@ -105,7 +105,7 @@ class TestAllCategoriesISO:
 class TestCategoryByIdISO:
     """Pruebas para obtener categoría por ID."""
 
-    @patch("src.routes.category.CategoryModel")
+    @patch("routes.category.CategoryModel")
     def test_get_category_by_id_found(self, mock_model, client):
         """
         Atributo: Adecuación Funcional (Exactitud)
@@ -125,7 +125,7 @@ class TestCategoryByIdISO:
         assert data["id"] == 1
         assert data["titulo"] == "Python Básico"
 
-    @patch("src.routes.category.CategoryModel")
+    @patch("routes.category.CategoryModel")
     def test_get_category_by_id_not_found(self, mock_model, client):
         """
         Atributo: Fiabilidad (Madurez)
@@ -159,8 +159,8 @@ class TestDeepSearchISO:
         data = response.json()
         assert data == []
 
-    @patch("src.routes.category.CategoryModel")
-    @patch("src.routes.category.TiendaCourse")
+    @patch("routes.category.CategoryModel")
+    @patch("routes.category.TiendaCourse")
     def test_deep_search_with_results(
         self, mock_tienda_course, mock_category_model, client
     ):
@@ -195,7 +195,7 @@ class TestDeepSearchISO:
         data = response.json()
         assert len(data) >= 1
 
-    @patch("src.routes.category.TiendaCourse")
+    @patch("routes.category.TiendaCourse")
     def test_deep_search_no_results(
         self, mock_tienda_course, client
     ):

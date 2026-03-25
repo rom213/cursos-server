@@ -34,7 +34,7 @@ from io import BytesIO
 class TestGetRefundsISO:
     """Pruebas para obtener reembolsos con paginación."""
 
-    @patch("src.routes.managmentAdmin.refund_model")
+    @patch("routes.managmentAdmin.refund_model")
     def test_get_refunds_happy_path(self, mock_refund_model, client):
         """
         Atributo: Adecuación Funcional (Exactitud)
@@ -129,7 +129,7 @@ class TestCreateRefundISO:
         data = response.json()
         assert "código" in data["message"].lower() or "verificación" in data["message"].lower()
 
-    @patch("src.routes.managmentAdmin.AuthService")
+    @patch("routes.managmentAdmin.AuthService")
     def test_create_refund_invalid_verification_code(
         self, mock_auth, client, app
     ):
@@ -152,10 +152,10 @@ class TestCreateRefundISO:
         )
         assert response.status_code == 400
 
-    @patch("src.routes.managmentAdmin.save_img")
-    @patch("src.routes.managmentAdmin.validate_refer")
-    @patch("src.routes.managmentAdmin.ReferModel")
-    @patch("src.routes.managmentAdmin.AuthService")
+    @patch("routes.managmentAdmin.save_img")
+    @patch("routes.managmentAdmin.validate_refer")
+    @patch("routes.managmentAdmin.ReferModel")
+    @patch("routes.managmentAdmin.AuthService")
     def test_create_refund_missing_required_fields(
         self, mock_auth, mock_refer_model, mock_validate,
         mock_save_img, client, app
@@ -185,7 +185,7 @@ class TestCreateRefundISO:
 class TestRefersISO:
     """Pruebas para consulta de referidos."""
 
-    @patch("src.routes.managmentAdmin.Refer")
+    @patch("routes.managmentAdmin.Refer")
     def test_get_unpaid_refers(self, mock_refer, client):
         """
         Atributo: Adecuación Funcional (Exactitud)
@@ -214,7 +214,7 @@ class TestRefersISO:
         data = response.json()
         assert data["status"] == "success"
 
-    @patch("src.routes.managmentAdmin.Refer")
+    @patch("routes.managmentAdmin.Refer")
     def test_get_paid_refers(self, mock_refer, client):
         """
         Atributo: Adecuación Funcional (Completitud)
@@ -239,7 +239,7 @@ class TestRefersISO:
         data = response.json()
         assert data["status"] == "success"
 
-    @patch("src.routes.managmentAdmin.Refer")
+    @patch("routes.managmentAdmin.Refer")
     def test_get_refer_by_id(self, mock_refer, client):
         """
         Atributo: Adecuación Funcional (Exactitud)
@@ -263,7 +263,7 @@ class TestRefersISO:
 class TestUserAccountsISO:
     """Pruebas para consulta de cuentas por usuario."""
 
-    @patch("src.routes.managmentAdmin.UserModel")
+    @patch("routes.managmentAdmin.UserModel")
     def test_user_accounts_not_found(self, mock_user_model, client):
         """
         Atributo: Fiabilidad (Madurez)
@@ -279,7 +279,7 @@ class TestUserAccountsISO:
         data = response.json()
         assert data["status"] == "error"
 
-    @patch("src.routes.managmentAdmin.UserModel")
+    @patch("routes.managmentAdmin.UserModel")
     def test_user_accounts_no_accounts(self, mock_user_model, client):
         """
         Atributo: Fiabilidad (Madurez)
@@ -297,7 +297,7 @@ class TestUserAccountsISO:
         )
         assert response.status_code == 404
 
-    @patch("src.routes.managmentAdmin.UserModel")
+    @patch("routes.managmentAdmin.UserModel")
     def test_user_accounts_happy_path(self, mock_user_model, client):
         """
         Atributo: Adecuación Funcional (Exactitud)
@@ -344,7 +344,7 @@ class TestMassPaymentISO:
         data = response.json()
         assert "verificación" in data["message"].lower() or "código" in data["message"].lower()
 
-    @patch("src.routes.managmentAdmin.AuthService")
+    @patch("routes.managmentAdmin.AuthService")
     def test_mass_payment_invalid_code(self, mock_auth, client):
         """
         Atributo: Seguridad
