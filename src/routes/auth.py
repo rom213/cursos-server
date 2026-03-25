@@ -1,16 +1,19 @@
-from flask import Blueprint, request, jsonify
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from config import settings
+from models import get_db
 from servises.auth.auth_service import AuthService
 
-auth_bp = Blueprint("auth", __name__)
+router = APIRouter(tags=["auth"])
 
-@auth_bp.route("/request-verification-code", methods=["POST"])
-def request_verification_code():
-    # Get email from config
-    from flask import current_app
-    email = current_app.config.get("ADMIN_EMAIL")
-    
+
+@router.post("/request-verification-code")
+async def request_verification_code(db: Session = Depends(get_db)):
+    _ = db
+    email = settings.ADMIN_EMAIL
     try:
-        AuthService.generate_verification_code(email)
-        return jsonify({"status": "success", "message": ""}), 200
+        await AuthService.generate_verification_code(email)
+        return {"status": "success", "message": ""}
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return {"status": "error", "message": str(e)}

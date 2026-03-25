@@ -54,7 +54,7 @@ class TestAllCategoriesISO:
 
         response = client.get("/api/category/all-categories")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert isinstance(data, list)
         assert len(data) == 1
 
@@ -95,7 +95,7 @@ class TestAllCategoriesISO:
 
         response = client.get("/api/category/all-categories")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data == []
 
 
@@ -121,7 +121,7 @@ class TestCategoryByIdISO:
 
         response = client.get("/api/category/1")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["id"] == 1
         assert data["titulo"] == "Python Básico"
 
@@ -136,7 +136,7 @@ class TestCategoryByIdISO:
 
         response = client.get("/api/category/9999")
         assert response.status_code == 404
-        data = json.loads(response.data)
+        data = response.json()
         assert "not found" in data["message"].lower()
 
 
@@ -156,7 +156,7 @@ class TestDeepSearchISO:
             "/api/category/categories/deep-search"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data == []
 
     @patch("src.routes.category.CategoryModel")
@@ -192,7 +192,7 @@ class TestDeepSearchISO:
             "/api/category/categories/deep-search?q=python&limit=5"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert len(data) >= 1
 
     @patch("src.routes.category.TiendaCourse")
@@ -215,5 +215,5 @@ class TestDeepSearchISO:
             "/api/category/categories/deep-search?q=xyz_no_existe"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data == []

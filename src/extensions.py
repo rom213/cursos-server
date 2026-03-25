@@ -1,15 +1,10 @@
-from flask_mysqldb import MySQL
-from flask import current_app
-from flask_mail import Mail
 from itsdangerous import URLSafeTimedSerializer
 
-# Crear instancias de las extensiones
+from config import settings
 
-mysql = MySQL()
-mail = Mail()
 
-def get_serializer():
+def get_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(
-        secret_key=current_app.config['SECRET_KEY'],
-        salt=current_app.config['SECURITY_PASSWORD_SALT']
+        secret_key=settings.SECRET_KEY,
+        salt=settings.SECURITY_PASSWORD_SALT,
     )

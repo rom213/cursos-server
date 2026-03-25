@@ -1,48 +1,59 @@
-from flask import Blueprint, request, jsonify, session, send_from_directory
-from datetime import datetime
-from servises.refund import refund_model
-from servises.refer.refer_model import ReferModel
-from servises.refund.mass_payment_service import MassPaymentService
-from models.account import AccountType
+import io
+import os
+from datetime import datetime, timedelta
+from typing import Any
+
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
+from sqlalchemy import Float, desc, func
+from sqlalchemy.orm import Session
+
+from config import settings
+from database import get_db
+from models import db
 from models.Refer import Refer
 from models.User import User
-from models.account import Account
-from datetime import datetime, timedelta
+from models.account import AccountType
 from servises.auth.auth_service import AuthService
+from servises.refer.refer_model import ReferModel
+from servises.refund import refund_model
+from servises.refund.mass_payment_service import MassPaymentService
 from servises.Users.user_model import UserModel
-import os
-from sqlalchemy import func, desc
-from models import db
 
-managmentAdmin_bp = Blueprint("managmentAdmin_bp", __name__)
+router = APIRouter(tags=["managment"])
+
 UPLOAD_DIRECTORY = os.path.join(os.getcwd(), "uploads")
 
 
-
-def serialize_refer(refer):
-        user = User.query.filter_by(google_id=refer.google_id).first()
-        return {
-            "refund_id": refer.refund.id,
-            "type_acc_em": refer.refund.type_acc_em.value,
-            "porcetage_refund":refer.porcentage,
-            "titular_acc_em": refer.refund.titular_acc_em,
-            "number_acc_em": refer.refund.number_acc_em,
-            "type_acc_re": refer.refund.type_acc_re.value,
-            "titular_acc_res": refer.refund.titular_acc_em,
-            "number_acc_res": refer.refund.number_acc_em,
-            "value": refer.value,
-            "image": refer.refund.image,
-            "created_at": refer.refund.created_at.isoformat(),
-            "refer_id": refer.id,
-            "google_id": refer.google_id,
-            "user": user.to_dict() if user else None,
-            "code_reference": refer.refund.code_reference
-        }
+# ==========================================
+# SERIALIZERS
+# ==========================================
 
 
-def serialize_refer_with_user(refer):
+def serialize_refer(refer) -> dict:
     user = User.query.filter_by(google_id=refer.google_id).first()
-    data = {
+    return {
+        "refund_id": refer.refund.id,
+        "type_acc_em": refer.refund.type_acc_em.value,
+        "porcetage_refund": refer.porcentage,
+        "titular_acc_em": refer.refund.titular_acc_em,
+        "number_acc_em": refer.refund.number_acc_em,
+        "type_acc_re": refer.refund.type_acc_re.value,
+        "titular_acc_res": refer.refund.titular_acc_em,
+        "number_acc_res": refer.refund.number_acc_em,
+        "value": refer.value,
+        "image": refer.refund.image,
+        "created_at": refer.refund.created_at.isoformat(),
+        "refer_id": refer.id,
+        "google_id": refer.google_id,
+        "user": user.to_dict() if user else None,
+        "code_reference": refer.refund.code_reference,
+    }
+
+
+def serialize_refer_with_user(refer) -> dict:
+    user = User.query.filter_by(google_id=refer.google_id).first()
+    data: dict[str, Any] = {
         "refer_id": refer.id,
         "google_id": refer.google_id,
         "porcentage": refer.porcentage,
@@ -55,7 +66,7 @@ def serialize_refer_with_user(refer):
         data["refund"] = {
             "refund_id": refer.refund.id,
             "type_acc_em": refer.refund.type_acc_em.value,
-            "porcetage_refund":refer.porcentage,
+            "porcetage_refund": refer.porcentage,
             "titular_acc_em": refer.refund.titular_acc_em,
             "number_acc_em": refer.refund.number_acc_em,
             "type_acc_re": refer.refund.type_acc_re.value,
@@ -66,18 +77,18 @@ def serialize_refer_with_user(refer):
             "created_at": refer.refund.created_at.isoformat(),
             "refer_id": refer.id,
             "google_id": refer.google_id,
-            "code_reference": refer.refund.code_reference
+            "code_reference": refer.refund.code_reference,
         }
     return data
 
-def serialize_refund_item(refund):
-    # Get user from the first refer (assuming all refers in a refund belong to same user)
+
+def serialize_refund_item(refund) -> dict:
     user = None
     google_id = None
-    if refund.refers and len(refund.refers) > 0:
+    if refund.refers:
         google_id = refund.refers[0].google_id
         user = User.query.filter_by(google_id=google_id).first()
-    
+
     return {
         "refund_id": refund.id,
         "type_acc_re": refund.type_acc_re.value if refund.type_acc_re else None,
@@ -99,432 +110,424 @@ def serialize_refund_item(refund):
                 "google_id": r.google_id,
                 "porcentage": r.porcentage,
                 "valor_curso": r.payment.price,
-                "created_at": r.created_at.isoformat() if r.created_at else None
-            } for r in refund.refers
-        ]
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in refund.refers
+        ],
     }
-        
-        
-def validate_refer(referModel, form):
-    refer = referModel.get_by_id(form["refer_id"])
-    
+
+
+# ==========================================
+# HELPERS
+# ==========================================
+
+
+def validate_refer(referModel, form_data: dict) -> bool:
+    refer = referModel.get_by_id(form_data["refer_id"])
     if refer is None:
-      return False
-  
-    refer_to_dic=refer.to_dict()
-    if refer_to_dic.get('refund'):
         return False
-    
+    if refer.to_dict().get("refund"):
+        return False
     return True
 
 
-
-def save_img(image_file):
-    try:
-        validator = refund_model.PILImageValidator()
-        image_service = refund_model.ImageStorageService(image_file, validator)
-        image_path = image_service.save()
-        return image_path
-    except Exception as e:
-        return None
-    
-def get_refer_json(referModel, form):
-    refer = referModel.get_by_id(form["refer_id"])
+def get_refer_json(referModel, form_data: dict) -> dict:
+    refer = referModel.get_by_id(form_data["refer_id"])
     return refer.to_dict()
-    
 
 
-@managmentAdmin_bp.route("/refunds", methods=["GET"])
-def get_refunds_by_date():
-    """
-    Endpoint para obtener reembolsos por fecha con búsqueda y paginación
-    
-    Query params:
-        - date_init (required): Fecha inicio en formato YYYY-MM-DD
-        - date_end (required): Fecha fin en formato YYYY-MM-DD
-        - search (optional): Término de búsqueda
-        - page (optional): Número de página (default: 1)
-        - per_page (optional): Elementos por página (default: 10)
-    """
+async def save_img_from_upload(image: UploadFile) -> str | None:
     try:
-        # Obtener parámetros
-        date_init_str = request.args.get("date_init")
-        date_end_str = request.args.get("date_end")
-        search_term = request.args.get("search", "").strip()
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 10, type=int)
-        
-        # Validar parámetros requeridos
-        if not all([date_init_str, date_end_str]):
-            return jsonify({
-                "status": "error",
-                "message": "Faltan parámetros requeridos: date_init y date_end",
-                "records": []
-            }), 400
+        contents = await image.read()
+        file_like = io.BytesIO(contents)
+        validator = refund_model.PILImageValidator()
+        image_service = refund_model.ImageStorageService(file_like, validator)
+        return image_service.save()
+    except Exception:
+        return None
 
-        # Validar paginación
-        if page < 1:
-            return jsonify({
-                "status": "error",
-                "message": "El número de página debe ser mayor a 0",
-                "records": []
-            }), 400
-        
-        if per_page < 1 or per_page > 100:
-            return jsonify({
-                "status": "error",
-                "message": "per_page debe estar entre 1 y 100",
-                "records": []
-            }), 400
-        
-        # Parsear fechas
+
+# ==========================================
+# ROUTES
+# ==========================================
+
+
+@router.get("/refunds")
+def get_refunds_by_date(
+    date_init: str = Query(...),
+    date_end: str = Query(...),
+    search: str = Query(""),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db_session: Session = Depends(get_db),
+):
+    try:
         try:
-            date_init = datetime.strptime(date_init_str, "%Y-%m-%d")
-            date_end = datetime.strptime(date_end_str, "%Y-%m-%d")
+            dt_init = datetime.strptime(date_init, "%Y-%m-%d")
+            dt_end = datetime.strptime(date_end, "%Y-%m-%d")
         except ValueError:
-            return jsonify({
-                "status": "error",
-                "message": "Formato de fecha inválido. Use YYYY-MM-DD",
-                "records": []
-            }), 400
-        
-        # Validar rango de fechas
-        if date_init > date_end:
-            return jsonify({
-                "status": "error",
-                "message": "La fecha de inicio no puede ser mayor a la fecha de fin",
-                "records": []
-            }), 400
-        
-        # Realizar búsqueda con paginación
+            raise HTTPException(
+                status_code=400,
+                detail="Formato de fecha inválido. Use YYYY-MM-DD",
+            )
+
+        if dt_init > dt_end:
+            raise HTTPException(
+                status_code=400,
+                detail="La fecha de inicio no puede ser mayor a la fecha de fin",
+            )
+
         result = refund_model.RefundQueryService.search_refunds(
-            date_init=date_init,
-            date_end=date_end,
-            search_term=search_term if search_term else None,
+            date_init=dt_init,
+            date_end=dt_end,
+            search_term=search.strip() if search.strip() else None,
             page=page,
-            per_page=per_page
+            per_page=per_page,
         )
-        
-        
-        # Serializar resultados
-        # Serializar resultados
-        serialized_records = [serialize_refund_item(ref) for ref in result["records"]]
-        
-        return jsonify({
+
+        return {
             "status": "success",
             "message": "OK",
-            "records": serialized_records,
+            "records": [serialize_refund_item(ref) for ref in result["records"]],
             "pagination": {
                 "total": result["total"],
                 "pages": result["pages"],
                 "current_page": result["current_page"],
                 "per_page": result["per_page"],
                 "has_next": result["has_next"],
-                "has_prev": result["has_prev"]
-            }
-        }), 200
-        
+                "has_prev": result["has_prev"],
+            },
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
-        # Log del error
-        print(f"Error en get_refunds_by_date: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "message": f"Error interno del servidor: {str(e)}",
-            "records": []
-        }), 500
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+@router.get("/refunds/{google_id}")
+def get_refunds(
+    google_id: str,
+    date_init: str = Query(...),
+    date_end: str = Query(...),
+    db_session: Session = Depends(get_db),
+):
+    try:
+        dt_init = datetime.strptime(date_init, "%Y-%m-%d")
+        dt_end = datetime.strptime(date_end, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
 
-@managmentAdmin_bp.route("/refunds/<google_id>", methods=["GET"])
-def get_refunds(google_id):
-
-    date_init_str = request.args.get("date_init")
-    date_end_str = request.args.get("date_end")
-
-    date_init = datetime.strptime(date_init_str, "%Y-%m-%d")
-    date_end = datetime.strptime(date_end_str, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
-
-
-    if google_id is None:
-        return jsonify({"status": "error", "message": "debes proporcionar un id valido", "records": []}), 401
-    results = refund_model.RefundQueryService.get_refunds_by_google_id(google_id, date_init, date_end)
-
-    return jsonify({"status": "success", "message": "OK", "records": [serialize_refer_with_user(ref) for ref in results]}), 200
+    results = refund_model.RefundQueryService.get_refunds_by_google_id(
+        google_id, dt_init, dt_end
+    )
+    return {
+        "status": "success",
+        "message": "OK",
+        "records": [serialize_refer_with_user(ref) for ref in results],
+    }
 
 
-
-
-@managmentAdmin_bp.route("/refund/<refund_id>", methods=["GET"])
-def get_refund_by_id(refund_id):
-    if refund_id is None:
-        return jsonify({"status": "error", "message": "debes proporcionar un id valido", "records": []}), 401
+@router.get("/refund/{refund_id}")
+def get_refund_by_id(refund_id: str, db_session: Session = Depends(get_db)):
     results = refund_model.RefundQueryService.get_refund_by_id(refund_id)
-    return jsonify({"status": "success", "message": "OK", "records": [serialize_refer_with_user(ref) for ref in results]}), 200
+    return {
+        "status": "success",
+        "message": "OK",
+        "records": [serialize_refer_with_user(ref) for ref in results],
+    }
 
 
-
-
-@managmentAdmin_bp.route("/refunds", methods=["POST"])
-def create_refund():
-    form = request.form
-    image_file = request.files.get("image")
-    verification_code = form.get("verification_code")
-
-    if not verification_code:
-        return jsonify({"status": "error", "message": "Falta el código de verificación"}), 400
-
-    # Verify code
-    from flask import current_app
-    email = current_app.config.get("ADMIN_EMAIL")
-    is_valid, message = AuthService.verify_code(email, verification_code)
+@router.post("/refunds", status_code=201)
+async def create_refund(
+    verification_code: str = Form(...),
+    type_acc_em: str = Form(...),
+    type_acc_re: str = Form(...),
+    titular_acc_em: str = Form(...),
+    titular_acc_res: str = Form(...),
+    number_acc_em: str = Form(...),
+    value: str = Form(...),
+    code_reference: str = Form(...),
+    refer_id: str = Form(...),
+    image: UploadFile = File(...),
+    db_session: Session = Depends(get_db),
+):
+    is_valid, message = AuthService.verify_code(settings.ADMIN_EMAIL, verification_code)
     if not is_valid:
-        return jsonify({"status": "error", "message": message}), 400
+        raise HTTPException(status_code=400, detail=message)
 
-    # Validación de campos requeridos
-    required_fields = [
-        "type_acc_em", "type_acc_re", "titular_acc_em", "titular_acc_res",
-        "number_acc_em", "value", "code_reference", "refer_id"
-    ]
+    form_data = {
+        "type_acc_em": type_acc_em,
+        "type_acc_re": type_acc_re,
+        "titular_acc_em": titular_acc_em,
+        "titular_acc_res": titular_acc_res,
+        "number_acc_em": number_acc_em,
+        "value": value,
+        "code_reference": code_reference,
+        "refer_id": refer_id,
+    }
 
-    missing = [f for f in required_fields if f not in form]
-    if missing or not image_file:
-        return jsonify({"status": "error", "message": f"Faltan campos: {missing} o imagen", "records": None}), 400
+    if not validate_refer(ReferModel, form_data):
+        raise HTTPException(
+            status_code=400,
+            detail="Facilitar un id refer valido",
+        )
 
+    image_path = await save_img_from_upload(image)
+    if image_path is None:
+        raise HTTPException(status_code=400, detail="Error al guardar imagen")
 
-    is_validated=validate_refer(ReferModel, form)
-
-    if is_validated==False:
-        return jsonify({"status": "error", "message": "Facilitar un id refer valido", "records": None}), 400
-
-
-    image_path = save_img(image_file)
-    if image_path==None:
-        return jsonify({"status": "error", "message": "Error al guardar imagen", "records": None}), 400
-
-    refer_json=get_refer_json(ReferModel, form)
+    refer_json = get_refer_json(ReferModel, form_data)
 
     refund_data = {
-        "type_acc_em": AccountType[form["type_acc_em"]],
-        "type_acc_re": AccountType[form["type_acc_re"]],
-        "titular_acc_em": form["titular_acc_em"],
-        "titular_acc_res": form["titular_acc_res"],
-        "code_reference": form["code_reference"],
-        "number_acc_em": form["number_acc_em"],
-        "value": refer_json.get('value'),
-        "image": image_path
+        "type_acc_em": AccountType[type_acc_em],
+        "type_acc_re": AccountType[type_acc_re],
+        "titular_acc_em": titular_acc_em,
+        "titular_acc_res": titular_acc_res,
+        "code_reference": code_reference,
+        "number_acc_em": number_acc_em,
+        "value": refer_json.get("value"),
+        "image": image_path,
     }
 
     refund_creator = refund_model.RefundCreator(refund_model.RefundRepository())
-
     refund = refund_creator.create_refund(refund_data)
 
-
-    return jsonify({
+    return {
         "status": "success",
         "message": "Refund created",
         "records": {
             "id": refund.id,
             "created_at": refund.created_at.isoformat(),
-            "image": refund.image
-        }
-    }), 201
+            "image": refund.image,
+        },
+    }
 
 
-@managmentAdmin_bp.route("/mass-payment", methods=["POST"])
-def create_mass_payment():
-    form = request.form
-    image_file = request.files.get("image")
-    verification_code = form.get("verification_code")
-    if not verification_code:
-        return jsonify({"status": "error", "message": "Falta el código de verificación"}), 400
-    from flask import current_app
-    email = current_app.config.get("ADMIN_EMAIL")
-    is_valid, message = AuthService.verify_code(email, verification_code)
+@router.post("/mass-payment", status_code=201)
+async def create_mass_payment(
+    verification_code: str = Form(...),
+    google_id: str = Form(...),
+    date_init: str = Form(...),
+    date_end: str = Form(...),
+    type_acc_em: str = Form(...),
+    type_acc_re: str = Form(...),
+    titular_acc_em: str = Form(...),
+    titular_acc_res: str = Form(...),
+    number_acc_res: str = Form(...),
+    number_acc_em: str = Form(...),
+    code_reference: str = Form(...),
+    list_ids_refers: str = Form(...),
+    image: UploadFile = File(...),
+    db_session: Session = Depends(get_db),
+):
+    is_valid, message = AuthService.verify_code(settings.ADMIN_EMAIL, verification_code)
     if not is_valid:
-        return jsonify({"status": "error", "message": message}), 400
-    
-    
-    required_fields = [
-        "google_id", "date_init", "date_end", 
-        "type_acc_em", "type_acc_re", "titular_acc_em", "titular_acc_res", "number_acc_res",
-        "number_acc_em", "code_reference"
-    ]
-    
-    missing = [f for f in required_fields if f not in form]
-    if missing or not image_file:
-        return jsonify({"status": "error", "message": f"Faltan campos: {missing} o imagen"}), 400
-        
+        raise HTTPException(status_code=400, detail=message)
+
     try:
-        date_init = datetime.strptime(form["date_init"], "%Y-%m-%d")
-        date_end = datetime.strptime(form["date_end"], "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
+        dt_init = datetime.strptime(date_init, "%Y-%m-%d")
+        dt_end = datetime.strptime(date_end, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
     except ValueError:
-        return jsonify({"status": "error", "message": "Formato de fecha inválido. Use YYYY-MM-DD"}), 400
-        
-    image_path = save_img(image_file)
+        raise HTTPException(
+            status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD"
+        )
+
+    image_path = await save_img_from_upload(image)
     if image_path is None:
-        return jsonify({"status": "error", "message": "Error al guardar imagen"}), 400
-        
+        raise HTTPException(status_code=400, detail="Error al guardar imagen")
+
     try:
         refund_data = {
-            "type_acc_em": AccountType[form["type_acc_em"]],
-            "type_acc_re": AccountType[form["type_acc_re"]],
-            "titular_acc_em": form["titular_acc_em"],
-            "titular_acc_res": form["titular_acc_res"],
-            "number_acc_em": form["number_acc_em"],
-            "number_acc_res": form["number_acc_res"],
-            "code_reference": form["code_reference"],
-            "image": image_path
+            "type_acc_em": AccountType[type_acc_em],
+            "type_acc_re": AccountType[type_acc_re],
+            "titular_acc_em": titular_acc_em,
+            "titular_acc_res": titular_acc_res,
+            "number_acc_em": number_acc_em,
+            "number_acc_res": number_acc_res,
+            "code_reference": code_reference,
+            "image": image_path,
         }
     except KeyError as e:
-        return jsonify({"status": "error", "message": f"Invalid account type: {e}"}), 400
-    
+        raise HTTPException(status_code=400, detail=f"Invalid account type: {e}")
+
     result = MassPaymentService.process_mass_payment(
-        google_id=form["google_id"],
+        google_id=google_id,
         refund_data=refund_data,
-        list_ids_refers=form["list_ids_refers"]
+        list_ids_refers=list_ids_refers,
     )
-    
+
     if result["status"] == "success":
-        return jsonify(result), 201
-    else:
-        return jsonify(result), 400
+        return result
+    raise HTTPException(status_code=400, detail=result.get("message", "Error"))
 
 
+@router.get("/uploads/{filename:path}")
+def serve_uploaded_image(filename: str):
+    file_path = os.path.join(UPLOAD_DIRECTORY, filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(file_path)
 
 
-@managmentAdmin_bp.route('/uploads/<path:filename>')
-def serve_uploaded_image(filename):
-    """
-    Esta ruta sirve los archivos desde el directorio UPLOAD_DIRECTORY.
-    El navegador podrá acceder a las imágenes usando una URL como:
-    http://127.0.0.1:5000/uploads/nombre_del_archivo.jpg
-    """
-    return send_from_directory(UPLOAD_DIRECTORY, filename)
+@router.get("/refers/unpaid")
+def get_unpaid_refers(
+    date_init: str = Query(...),
+    date_end: str = Query(...),
+    db_session: Session = Depends(get_db),
+):
+    try:
+        dt_init = datetime.strptime(date_init, "%Y-%m-%d")
+        dt_end = datetime.strptime(date_end, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
 
-
-
-@managmentAdmin_bp.route("/refers/unpaid", methods=["GET"])
-def get_unpaid_refers():
-    date_init_str = request.args.get("date_init")
-    date_end_str = request.args.get("date_end")
-
-    date_init = datetime.strptime(date_init_str, "%Y-%m-%d")
-    date_end = datetime.strptime(date_end_str, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
-
-    refers = Refer.query.filter(Refer.refund_id == None)\
-    .filter(Refer.created_at >= date_init) \
-    .filter(Refer.created_at <= date_end) \
-    .all()
-
-    return jsonify({"status": "success", "message": "OK", "records": [serialize_refer_with_user(r) for r in refers]}), 200
-
-
-@managmentAdmin_bp.route("/refers/paid", methods=["GET"])
-def get_paid_refers():
-    date_init_str = request.args.get("date_init")
-    date_end_str = request.args.get("date_end")
-
-    date_init = datetime.strptime(date_init_str, "%Y-%m-%d")
-    date_end = datetime.strptime(date_end_str, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
-
-    refers = Refer.query.filter(Refer.refund_id != None)\
-    .filter(Refer.created_at >= date_init) \
-    .filter(Refer.created_at <= date_end) \
-    .all()
-    return jsonify({"status": "success", "message": "OK", "records": [serialize_refer_with_user(r) for r in refers]}), 200
-
-
-@managmentAdmin_bp.route("/refers/unpaid/<google_id>", methods=["GET"])
-def get_unpaid_refer_by_google_id(google_id):
-    refers = Refer.query.filter(Refer.refund_id == None)\
-    .filter(Refer.google_id==google_id)\
-    .all()
-    return jsonify({"status": "success", "message": "OK", "records": [serialize_refer_with_user(r) for r in refers]}), 200
-
-
-@managmentAdmin_bp.route("/refers/paid/<google_id>", methods=["GET"])
-def get_paid_refer_by_google_id(google_id):
-    refers = Refer.query.filter(Refer.refund_id != None)\
-    .filter(Refer.google_id==google_id)\
-    .all()
-    return jsonify({"status": "success", "message": "OK", "records": [serialize_refer_with_user(r) for r in refers]}), 200
-
-@managmentAdmin_bp.route("/refer/<refer_id>", methods=["GET"])
-def get_paid_refer_by_id(refer_id):
-    refers = Refer.query\
-    .filter(Refer.id==refer_id)\
-    .all()
-    return jsonify({"status": "success", "message": "OK", "records": [serialize_refer_with_user(r) for r in refers]}), 200
-
-@managmentAdmin_bp.route("/user/accounts/<googleid>", methods=["GET"])
-def user_account_by_google_id(googleid):
-    res=UserModel.get_accounts_by_google_id(googleid)
-    
-    # Validar que el usuario existe
-    if res is None:
-        return jsonify({
-            "status": "error",
-            "message": "Usuario no encontrado",
-            "records": []
-        }), 404
-    
-    # Validar que el usuario tiene cuentas registradas
-    if not hasattr(res, 'accounts') or not res.accounts:
-        return jsonify({
-            "status": "error",
-            "message": "El usuario no tiene cuentas registradas",
-            "records": []
-        }), 404
-    
-    return jsonify({
+    refers = (
+        Refer.query.filter(Refer.refund_id.is_(None))
+        .filter(Refer.created_at >= dt_init)
+        .filter(Refer.created_at <= dt_end)
+        .all()
+    )
+    return {
         "status": "success",
         "message": "OK",
-        "records": [[acc.to_dict() for acc in res.accounts]]
-    }), 200
+        "records": [serialize_refer_with_user(r) for r in refers],
+    }
 
 
-@managmentAdmin_bp.route("/users/pending-refunds", methods=["GET"])
-def get_pending_refund_users():
+@router.get("/refers/paid")
+def get_paid_refers(
+    date_init: str = Query(...),
+    date_end: str = Query(...),
+    db_session: Session = Depends(get_db),
+):
     try:
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 10, type=int)
+        dt_init = datetime.strptime(date_init, "%Y-%m-%d")
+        dt_end = datetime.strptime(date_end, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
 
-        query = db.session.query(
-            User,
-            func.sum(func.cast(Refer.value, db.Float)).label("total_owed"),
-            func.count(Refer.id).label("refers_count")
-        ).join(Refer, User.google_id == Refer.google_id)\
-         .filter(Refer.refund_id == None)\
-         .group_by(User.id)\
-         .order_by(desc(User.created_at))
+    refers = (
+        Refer.query.filter(Refer.refund_id.isnot(None))
+        .filter(Refer.created_at >= dt_init)
+        .filter(Refer.created_at <= dt_end)
+        .all()
+    )
+    return {
+        "status": "success",
+        "message": "OK",
+        "records": [serialize_refer_with_user(r) for r in refers],
+    }
 
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
-        records = []
-        for user, total_owed, refers_count in pagination.items:
-            records.append({
+@router.get("/refers/unpaid/{google_id}")
+def get_unpaid_refer_by_google_id(google_id: str, db_session: Session = Depends(get_db)):
+    refers = (
+        Refer.query.filter(Refer.refund_id.is_(None))
+        .filter(Refer.google_id == google_id)
+        .all()
+    )
+    return {
+        "status": "success",
+        "message": "OK",
+        "records": [serialize_refer_with_user(r) for r in refers],
+    }
+
+
+@router.get("/refers/paid/{google_id}")
+def get_paid_refer_by_google_id(google_id: str, db_session: Session = Depends(get_db)):
+    refers = (
+        Refer.query.filter(Refer.refund_id.isnot(None))
+        .filter(Refer.google_id == google_id)
+        .all()
+    )
+    return {
+        "status": "success",
+        "message": "OK",
+        "records": [serialize_refer_with_user(r) for r in refers],
+    }
+
+
+@router.get("/refer/{refer_id}")
+def get_paid_refer_by_id(refer_id: str, db_session: Session = Depends(get_db)):
+    refers = Refer.query.filter(Refer.id == refer_id).all()
+    return {
+        "status": "success",
+        "message": "OK",
+        "records": [serialize_refer_with_user(r) for r in refers],
+    }
+
+
+@router.get("/user/accounts/{googleid}")
+def user_account_by_google_id(googleid: str, db_session: Session = Depends(get_db)):
+    res = UserModel.get_accounts_by_google_id(googleid)
+
+    if res is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Usuario no encontrado",
+        )
+
+    if not hasattr(res, "accounts") or not res.accounts:
+        raise HTTPException(
+            status_code=404,
+            detail="El usuario no tiene cuentas registradas",
+        )
+
+    return {
+        "status": "success",
+        "message": "OK",
+        "records": [[acc.to_dict() for acc in res.accounts]],
+    }
+
+
+@router.get("/users/pending-refunds")
+def get_pending_refund_users(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db_session: Session = Depends(get_db),
+):
+    try:
+        query = (
+            db.session.query(
+                User,
+                func.sum(func.cast(Refer.value, Float)).label("total_owed"),
+                func.count(Refer.id).label("refers_count"),
+            )
+            .join(Refer, User.google_id == Refer.google_id)
+            .filter(Refer.refund_id.is_(None))
+            .group_by(User.id)
+            .order_by(desc(User.created_at))
+        )
+
+        total = query.count()
+        pages = (total + per_page - 1) // per_page if per_page else 0
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+
+        records = [
+            {
                 "user": user.to_dict(),
                 "total_owed": total_owed,
-                "refers_count": refers_count
-            })
+                "refers_count": refers_count,
+            }
+            for user, total_owed, refers_count in items
+        ]
 
-        return jsonify({
+        return {
             "status": "success",
             "message": "OK",
             "records": [records],
             "pagination": {
-                "total": pagination.total,
-                "pages": pagination.pages,
-                "current_page": pagination.page,
-                "per_page": pagination.per_page,
-                "has_next": pagination.has_next,
-                "has_prev": pagination.has_prev
-            }
-        }), 200
+                "total": total,
+                "pages": pages,
+                "current_page": page,
+                "per_page": per_page,
+                "has_next": page < pages,
+                "has_prev": page > 1,
+            },
+        }
     except Exception as e:
-        print(f"Error in get_pending_refund_users: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "message": f"Error interno del servidor: {str(e)}",
-            "records": []
-        }), 500
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}",
+        )

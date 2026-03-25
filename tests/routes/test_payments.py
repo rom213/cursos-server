@@ -50,7 +50,7 @@ def test_payu_firm_security_unauthorized(client):
     response = client.post('/payu-firm', json={"categories": [{"id_category": 1}]})
     assert response.status_code == 401
     
-    data = json.loads(response.data)
+    data = response.json()
     assert data["success"] is False
     assert "No ha iniciado sesión" in data["error"]
     print("\n[OK] [EXITO] Seguridad: Acceso no autorizado a API de firmas bloqueado correctamente.")
@@ -81,7 +81,7 @@ def test_payu_firm_functional_suitability_happy_path(mock_payment_repo, mock_cal
     response = client.post('/payu-firm', json=payload)
     
     assert response.status_code == 200
-    data = json.loads(response.data)
+    data = response.json()
     
     assert data["signature"] == "firma_secreta_falsa_123"
     assert data["reference_code"] == "REFERENCIA-TEST-001"
@@ -105,7 +105,7 @@ def test_payu_confirmation_functional_suitability(mock_submit, client):
     response = client.post('/payu-confirmation', data=payload)
     
     assert response.status_code == 200
-    data = json.loads(response.data)
+    data = response.json()
     
     assert data["message"] == "Confirmation received"
     assert data["transaction_status"] == "approved"
@@ -126,7 +126,7 @@ def test_payu_confirmation_reliability_missing_params(client):
     response = client.post('/payu-confirmation', data=payload)
     
     assert response.status_code == 400
-    data = json.loads(response.data)
+    data = response.json()
     assert data["error"] == "Missing parameters"
     print("\n[OK] [EXITO] Fiabilidad: Peticion incompleta detectada y manejada con HTTP 400 sin sufrir crash.")
 
@@ -146,7 +146,7 @@ def test_payu_firm_reliability_internal_error(mock_calc_price, app, client):
     response = client.post('/payu-firm', json=payload)
     
     assert response.status_code == 500
-    data = json.loads(response.data)
+    data = response.json()
     assert "posible error" in data["message"].lower()
     print("\n[OK] [EXITO] Fiabilidad: Error interno simulado fue atrapado de manera segura con HTTP 500.")
 
@@ -164,6 +164,6 @@ def test_paypal_webhook_event_error_handling(mock_get_items, mock_payment_find, 
     response = client.post('/paypal/webhook', json=payload)
     
     assert response.status_code == 500
-    data = json.loads(response.data)
+    data = response.json()
     assert "error" in data
     print("\n[OK] [EXITO] Fiabilidad: Webhook de PayPal con payload basura fue tolerado respondiendo HTTP 500.")

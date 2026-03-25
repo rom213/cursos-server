@@ -56,7 +56,7 @@ class TestGetRefundsISO:
             "?date_init=2024-01-01&date_end=2024-12-31"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "success"
         assert "pagination" in data
 
@@ -67,7 +67,7 @@ class TestGetRefundsISO:
         """
         response = client.get("/api/managment/refunds")
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "error"
 
     def test_get_refunds_invalid_date_format(self, client):
@@ -104,7 +104,7 @@ class TestGetRefundsISO:
             "?date_init=2024-12-31&date_end=2024-01-01"
         )
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.json()
         assert "mayor" in data["message"].lower()
 
 
@@ -126,7 +126,7 @@ class TestCreateRefundISO:
             content_type="multipart/form-data",
         )
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.json()
         assert "código" in data["message"].lower() or "verificación" in data["message"].lower()
 
     @patch("src.routes.managmentAdmin.AuthService")
@@ -211,7 +211,7 @@ class TestRefersISO:
             "?date_init=2024-01-01&date_end=2024-12-31"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "success"
 
     @patch("src.routes.managmentAdmin.Refer")
@@ -236,7 +236,7 @@ class TestRefersISO:
             "?date_init=2024-01-01&date_end=2024-12-31"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "success"
 
     @patch("src.routes.managmentAdmin.Refer")
@@ -253,7 +253,7 @@ class TestRefersISO:
 
         response = client.get("/api/managment/refer/1")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "success"
 
 
@@ -276,7 +276,7 @@ class TestUserAccountsISO:
             "/api/managment/user/accounts/no_existe_99999"
         )
         assert response.status_code == 404
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "error"
 
     @patch("src.routes.managmentAdmin.UserModel")
@@ -319,7 +319,7 @@ class TestUserAccountsISO:
             "/api/managment/user/accounts/118070327157829661695"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "success"
 
 
@@ -341,7 +341,7 @@ class TestMassPaymentISO:
             content_type="multipart/form-data",
         )
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.json()
         assert "verificación" in data["message"].lower() or "código" in data["message"].lower()
 
     @patch("src.routes.managmentAdmin.AuthService")

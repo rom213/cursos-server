@@ -87,7 +87,7 @@ class TestUpdateAccountISO:
             },
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "succes"
 
     @patch("src.routes.account.UserModel")

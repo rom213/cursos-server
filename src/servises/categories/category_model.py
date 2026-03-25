@@ -8,7 +8,6 @@ from datetime import datetime
 from models.Course import Course 
 from models.Payment import Payment
 from models.Message import Message
-from flask import session
 from servises.payment.payment_repository import PaymentRespository
 from models.SystemVariable import SystemVariable
 
@@ -16,7 +15,6 @@ from models.SystemVariable import SystemVariable
 load_dotenv()
 
 class CategoryModel(Category):
-    courses = db.relationship('Course', backref='category', lazy=True)
     def __init__(self, url=None, title=None, frase_1=None, frase_2=None, imagen_url=None, num_per=None,
                  descuento=None, precio=None, duracion=None, delete_at=None, descuento_total_price=0):
         self.url = url
@@ -78,31 +76,25 @@ class CategoryModel(Category):
             return query.limit(limit).all()
         return query.all()
     
-    def user_is_bought(self):
-        if "user" not in session:
+    def user_is_bought(self, viewer_google_id: str | None = None):
+        if not viewer_google_id:
             return False
-        user_google_id = session["user"]["google_id"]
         return Payment.query.filter(
-            (Payment.google_id == user_google_id) & (Payment.category_id == self.id)
+            (Payment.google_id == viewer_google_id) & (Payment.category_id == self.id)
         ).first() is not None
-    
 
-    def user_is_any_bougth(self):
-        if "user" not in session:
+    def user_is_any_bougth(self, viewer_google_id: str | None = None):
+        if not viewer_google_id:
             return False
-        user_google_id = session["user"]["google_id"]
         return Payment.query.filter(
-            Payment.google_id == user_google_id
+            Payment.google_id == viewer_google_id
         ).first() is not None
-    
-    
 
-    def user_is_comment(self):
-        if "user" not in session:
+    def user_is_comment(self, viewer_google_id: str | None = None):
+        if not viewer_google_id:
             return False
-        user_google_id = session["user"]["google_id"]
         return Message.query.filter(
-            (Message.google_id == user_google_id) & (Message.category_id == self.id)
+            (Message.google_id == viewer_google_id) & (Message.category_id == self.id)
         ).first() is not None
     
 
@@ -236,10 +228,15 @@ class CategoryModel(Category):
             "cantidad_cursos": len(all_cursos)
         }
 
-    def to_dict(self, light=False):
+    def to_dict(
+        self,
+        light=False,
+        user_country: str | None = None,
+        viewer_google_id: str | None = None,
+    ):
         """Convierte la instancia en un diccionario para facilitar la serialización."""
 
-        user_country = (session.get("user", {}).get("country") or "").upper()
+        user_country = (user_country or "").upper()
         cambio_dolar_raw = SystemVariable.query.filter_by(campo_codigo="CAMBIO_DOLAR").first()
         try:
             cambio_dolar = float(cambio_dolar_raw.dato) if cambio_dolar_raw and cambio_dolar_raw.dato else 1.0
@@ -279,8 +276,8 @@ class CategoryModel(Category):
             'descuento': self.descuento,
             'precio': precio,
             'duracion': self.duracion,
-            'user_bought': self.user_is_bought(),
-            'user_comment': self.user_is_comment(),
+            'user_bought': self.user_is_bought(viewer_google_id),
+            'user_comment': self.user_is_comment(viewer_google_id),
             'courses': courses,
             'delete_at': self.delete_at.isoformat() if self.delete_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None

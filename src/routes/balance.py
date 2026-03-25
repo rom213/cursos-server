@@ -1,106 +1,109 @@
-from flask import Blueprint, request, jsonify, session
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from database import get_db
 from servises.balance.balance_model import BalanceModel
-from datetime import datetime
-from datetime import timedelta
+from utils.auth import get_google_id
 
-balance_bp = Blueprint("balance", __name__)
-
+router = APIRouter(tags=["balance"])
 
 
-@balance_bp.route("/balance", methods=["GET"])
-def all_balance_categories():
-    date_init_str = request.args.get("date_init")
-    date_end_str = request.args.get("date_end")
-    
-
-    date_init = datetime.strptime(date_init_str, "%Y-%m-%d")
-    date_end = datetime.strptime(date_end_str, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
-    
-    if "user" not in session:
-        return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
-
-    user_google_id = session["user"]["google_id"]
-
-    if not date_init or not date_end:
-        return jsonify({"status": "ERROR", "message": "Se requieren las fechas 'date_init' y 'date_end'.", "records": []}), 200
-
-
+@router.get("/balance")
+def all_balance_categories(
+    date_init: str = Query(...),
+    date_end: str = Query(...),
+    google_id: str = Depends(get_google_id),
+    db: Session = Depends(get_db),
+):
     try:
-        summary = BalanceModel.get_all_sales_by_me(
-            google_id=user_google_id,
-            date_init=date_init,
-            date_end=date_end
-        )
-        
-        return jsonify({
-            "count": summary["counts"],
-            "non_refunded_value": summary["non_refunded_value"],
-            "refunded_value": summary["refunded_value"],
-            "total_value_all_refunds": summary["total_value"],
-            "courses_payments_value": summary["courses_payments_value"],
-            "list_ids_refers": summary["list_ids_refers"]
-        }), 200
-
-    except Exception as e:
-        return jsonify({"status": "ERROR", "message": "KO", "records": []}), 200
-
-@balance_bp.route("/balance/user/<google_id>", methods=["GET"])
-def all_balance_categories_by_google_id(google_id):
-    date_init_str = request.args.get("date_init")
-    date_end_str = request.args.get("date_end")
-    
-
-    date_init = datetime.strptime(date_init_str, "%Y-%m-%d")
-    date_end = datetime.strptime(date_end_str, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
-
-    if not date_init or not date_end:
-        return jsonify({"status": "ERROR", "message": "Se requieren las fechas 'date_init' y 'date_end'.", "records": []}), 200
-
+        dt_init = datetime.strptime(date_init, "%Y-%m-%d")
+        dt_end = datetime.strptime(date_end, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Fechas inválidas. Usa formato YYYY-MM-DD")
 
     try:
         summary = BalanceModel.get_all_sales_by_me(
             google_id=google_id,
-            date_init=date_init,
-            date_end=date_end
+            date_init=dt_init,
+            date_end=dt_end,
         )
-        return jsonify({"status": "success", "message": "OK", "records": [{
+        return {
             "count": summary["counts"],
             "non_refunded_value": summary["non_refunded_value"],
             "refunded_value": summary["refunded_value"],
             "total_value_all_refunds": summary["total_value"],
             "courses_payments_value": summary["courses_payments_value"],
-            "list_ids_refers": summary["list_ids_refers"]
-        }]}), 200
+            "list_ids_refers": summary["list_ids_refers"],
+        }
+    except Exception:
+        raise HTTPException(status_code=200, detail="KO")
 
-    except Exception as e:
-        return jsonify({"status": "ERROR", "message": "KO", "records": []}), 200
 
-
-@balance_bp.route("/balance/all", methods=["GET"])
-def balance_categories():
-    date_init_str = request.args.get("date_init")
-    date_end_str = request.args.get("date_end")
-    
-
-    date_init = datetime.strptime(date_init_str, "%Y-%m-%d")
-    date_end = datetime.strptime(date_end_str, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
-
-    if not date_init or not date_end:
-        return jsonify({"status": "ERROR", "message": "Se requieren las fechas 'date_init' y 'date_end'.", "records": []}), 200
-
+@router.get("/balance/user/{google_id_param}")
+def all_balance_categories_by_google_id(
+    google_id_param: str,
+    date_init: str = Query(...),
+    date_end: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        dt_init = datetime.strptime(date_init, "%Y-%m-%d")
+        dt_end = datetime.strptime(date_end, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Fechas inválidas. Usa formato YYYY-MM-DD")
 
     try:
-        summary = BalanceModel.get_all_sales(
-            date_init=date_init,
-            date_end=date_end
+        summary = BalanceModel.get_all_sales_by_me(
+            google_id=google_id_param,
+            date_init=dt_init,
+            date_end=dt_end,
         )
-        return jsonify({"status": "success", "message": "OK", "records": [{
-            "count": summary["counts"],
-            "non_refunded_value": summary["non_refunded_value"],
-            "refunded_value": summary["refunded_value"],
-            "total_value_all_refunds": summary["total_value"],
-            "courses_payments_value": summary["courses_payments_value"]
-        }]}), 200
+        return {
+            "status": "success",
+            "message": "OK",
+            "records": [
+                {
+                    "count": summary["counts"],
+                    "non_refunded_value": summary["non_refunded_value"],
+                    "refunded_value": summary["refunded_value"],
+                    "total_value_all_refunds": summary["total_value"],
+                    "courses_payments_value": summary["courses_payments_value"],
+                    "list_ids_refers": summary["list_ids_refers"],
+                }
+            ],
+        }
+    except Exception:
+        return {"status": "ERROR", "message": "KO", "records": []}
 
-    except Exception as e:
-        return jsonify({"status": "ERROR", "message": "KO", "records": []}), 200
+
+@router.get("/balance/all")
+def balance_categories(
+    date_init: str = Query(...),
+    date_end: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        dt_init = datetime.strptime(date_init, "%Y-%m-%d")
+        dt_end = datetime.strptime(date_end, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Fechas inválidas. Usa formato YYYY-MM-DD")
+
+    try:
+        summary = BalanceModel.get_all_sales(date_init=dt_init, date_end=dt_end)
+        return {
+            "status": "success",
+            "message": "OK",
+            "records": [
+                {
+                    "count": summary["counts"],
+                    "non_refunded_value": summary["non_refunded_value"],
+                    "refunded_value": summary["refunded_value"],
+                    "total_value_all_refunds": summary["total_value"],
+                    "courses_payments_value": summary["courses_payments_value"],
+                }
+            ],
+        }
+    except Exception:
+        return {"status": "ERROR", "message": "KO", "records": []}

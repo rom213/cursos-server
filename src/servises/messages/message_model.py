@@ -5,7 +5,6 @@ from models import User
 from sqlalchemy import and_
 
 class MessageModel(Message):
-    user = db.relationship('User', backref='category', lazy=True)
     def __init__(self, category_id, google_id, message="", stars=0 ):
         self.category_id = category_id
         self.google_id = google_id
@@ -56,12 +55,13 @@ class MessageModel(Message):
 
     def to_dict(self):
         """Convierte la instancia en un diccionario para facilitar la serialización."""
+        u = User.query.filter_by(google_id=self.google_id).first()
         return {
             'id': self.id,
             'google_id': self.google_id,
             'category_id': self.category_id,
             'stars': self.stars,
             'message': self.message,
-            'user': self.user.to_dict(),
+            'user': u.to_dict() if u else None,
             'created_at': self.created_at.strftime("%Y-%m-%d") if self.created_at else None
         }

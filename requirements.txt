@@ -1,0 +1,40 @@
+# FastAPI stack
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Database
+SQLAlchemy==2.0.36
+pymysql==1.1.1
+# asyncmy: opcional para drivers async MySQL; en Windows suele requerir MSVC. El proyecto usa pymysql sync.
+
+# Auth & security
+python-jose[cryptography]==3.3.0
+itsdangerous==2.2.0
+
+# HTTP clients
+httpx==0.28.1
+requests==2.32.3
+
+# Email
+fastapi-mail==1.4.1
+
+# Google OAuth
+google-auth==2.36.0
+
+# Payments (legacy SDK; migrate to REST+httpx gradually)
+paypalrestsdk==1.13.3
+
+# Utils
+python-dotenv==1.0.1
+Pillow==11.0.0
+pyspellchecker==0.8.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+
+# Load testing (optional)
+locust==2.32.4

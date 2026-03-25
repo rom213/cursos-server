@@ -1,25 +1,37 @@
-from flask import Blueprint, request, jsonify, session
-from servises.messages.message_model import  MessageModel
-from servises.request.validate_data import ValidateData
-from servises.Users.user_repository import UserRepository
+from fastapi import APIRouter, Body, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import Any
+
+from database import get_db
+from servises.messages.message_model import MessageModel
 from servises.messages.message_repository import MessageRepository
+from servises.request.validate_data import ValidateData
+from utils.auth import get_google_id, get_token_payload_optional
 
-message_bp = Blueprint("messages", __name__)
+router = APIRouter(tags=["messages"])
 
 
-@message_bp.route("/all-messages/<int:id>", methods=["GET"])
-def allMessagesByCategory(id):
+@router.get("/all-messages/{id}")
+def all_messages_by_category(
+    id: int,
+    payload: dict | None = Depends(get_token_payload_optional),
+    db: Session = Depends(get_db),
+):
     try:
         messages = MessageModel.get_by_category_id(id)
 
-        if "user" not in session:
-            return jsonify({
+        if payload is None:
+            return {
                 "is_login": False,
                 "is_comment": False,
-                "messages": sorted([msg.to_dict() for msg in messages], key=lambda x: x["stars"], reverse=True)
-            }), 200
+                "messages": sorted(
+                    [msg.to_dict() for msg in messages],
+                    key=lambda x: x["stars"],
+                    reverse=True,
+                ),
+            }
 
-        user_google_id = session["user"]["google_id"]
+        user_google_id = payload.get("google_id")
         user_comment = None
         other_comments = []
 
@@ -31,39 +43,41 @@ def allMessagesByCategory(id):
                 other_comments.append(msg_dict)
 
         other_comments.sort(key=lambda x: x["stars"], reverse=True)
-
         ordered_messages = [user_comment] + other_comments if user_comment else other_comments
 
-        return jsonify({
+        return {
             "is_login": True,
             "is_comment": bool(user_comment),
-            "messages": ordered_messages
-        }), 200
+            "messages": ordered_messages,
+        }
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-
-@message_bp.route("/add-message-category", methods=["POST"])
-def payu_confirmation():
+@router.post("/add-message-category")
+def add_message_category(
+    data: dict[str, Any] = Body(...),
+    google_id: str = Depends(get_google_id),
+    db: Session = Depends(get_db),
+):
     try:
-        is_login = UserRepository.verify_seccion()
-        if is_login is False:
-            return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
+        ValidateData.validate_request_data(
+            required_fields=["category_id", "message", "stars"],
+            data=data,
+        )
+        message = MessageRepository(
+            stars=data.get("stars"),
+            message=data.get("message"),
+            google_id=google_id,
+            category_id=data.get("category_id"),
+        )
 
-        required_fields = ["category_id", "message", "stars"]
-        data, error = ValidateData.validate_request_data(required_fields=required_fields)
-        if error:
-            return error
-        
-        user_data = session.get("user")
-        message = MessageRepository(stars=data.get("stars"), message=data.get("message"), google_id=user_data.get("google_id"), category_id=data.get("category_id"))
-        
-        message_verify=message.verify()
-        
+        message_verify = message.verify()
         if message_verify is True:
             message.save()
-            return jsonify({"message": "Menssage guardado"}), 200
+            return {"message": "Menssage guardado"}
         return message_verify
-    except:
-        return jsonify({"message": "error en el sistema"}), 500
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="error en el sistema")

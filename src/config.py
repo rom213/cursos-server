@@ -1,36 +1,72 @@
+from __future__ import annotations
+
 import os
-from dotenv import load_dotenv
+from functools import lru_cache
+from pathlib import Path
 
-# Carga las variables del archivo .env
-load_dotenv()
-
-class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY")
-    SECURITY_PASSWORD_SALT = os.getenv("SECURITY_PASSWORD_SALT")
-    SQLALCHEMY_TRACK_MODIFICATIONS = os.getenv("SQLALCHEMY_TRACK_MODIFICATIONS") == "True"
-
-    MAIL_SERVER = os.getenv("MAIL_SERVER")
-    MAIL_PORT = int(os.getenv("MAIL_PORT", 587))  # Asegura que sea un entero
-    MAIL_USE_TLS = os.getenv("MAIL_USE_TLS") == "True"
-    MAIL_USERNAME = os.getenv("MAIL_USERNAME")
-    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
-    MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER")
-    ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "romarioariza@gmail.com")
-
-    CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")
-    CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND")
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class DevelopmentConfig(Config):
-    DEBUG = True
-    MYSQL_HOST = os.getenv("MYSQL_HOST")
-    MYSQL_USER = os.getenv("MYSQL_USER")
-    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-    MYSQL_DB = os.getenv("MYSQL_DB")
-    
-    SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}?charset=utf8mb4"
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    # Carpeta de subida para los avatares
-    UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), "static/uploads")
+    SECRET_KEY: str
+    SECURITY_PASSWORD_SALT: str
+    SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
 
-config = {"development": DevelopmentConfig}
+    MYSQL_HOST: str
+    MYSQL_USER: str
+    MYSQL_PASSWORD: str
+    MYSQL_DB: str
+
+    MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_PORT: int = 587
+    MAIL_USE_TLS: bool = True
+    MAIL_USERNAME: str = ""
+    MAIL_PASSWORD: str = ""
+    MAIL_DEFAULT_SENDER: str = ""
+    ADMIN_EMAIL: str = "romarioariza@gmail.com"
+
+    GOOGLE_CLIENT_ID: str = ""
+
+    REFUND_PERCENTAGE: float = 30.0
+
+    # PayU
+    PAYU_URL: str = ""
+    PAYU_API_KEY: str = ""
+    PAYU_MERCHANT_ID: str = ""
+    PAYU_ACCOUNT_ID: str = ""
+
+    # PayPal (preferir variables de entorno; valores por defecto vacíos)
+    PAYPAL_MODE: str = "sandbox"
+    PAYPAL_CLIENT_ID: str = ""
+    PAYPAL_CLIENT_SECRET: str = ""
+
+    CELERY_BROKER_URL: str | None = None
+    CELERY_RESULT_BACKEND: str | None = None
+
+    DEBUG: bool = True
+
+    @property
+    def SQLALCHEMY_DATABASE_URI(self) -> str:
+        return (
+            f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}"
+            f"@{self.MYSQL_HOST}/{self.MYSQL_DB}?charset=utf8mb4"
+        )
+
+    @property
+    def upload_folder(self) -> str:
+        base = Path(__file__).resolve().parent
+        return str(base / "static" / "uploads")
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

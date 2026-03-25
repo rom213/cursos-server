@@ -1,14 +1,14 @@
-from flask import Blueprint, request, jsonify
-from servises.groups.repository import GroupRepository
+from typing import Any
+
+from fastapi import HTTPException
 
 
 class ValidateData:
-    def validate_request_data(required_fields):
-        data = request.get_json()
+    @staticmethod
+    def validate_request_data(required_fields: list[str], data: dict[str, Any] | None):
         if not data:
-            return None, (jsonify({"error": "No se proporcionaron datos"}), 400)
+            raise HTTPException(status_code=400, detail="No se proporcionaron datos")
         for field in required_fields:
             if field not in data:
-                return None, (jsonify({"error": f"Falta el parámetro: {field}"}), 400)
-        return data, None
-
+                raise HTTPException(status_code=400, detail=f"Falta el parámetro: {field}")
+        return data

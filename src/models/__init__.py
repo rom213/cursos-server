@@ -1,8 +1,40 @@
-from flask_sqlalchemy import SQLAlchemy
+from database import Base, db, get_db, session_scope
 
-db = SQLAlchemy()
+from .User import User, TipoUsuario
+from .account import Account, AccountType
+from .Category import Category, TipoCategoria, category_relations
+from .Course import Course
+from .Message import Message
+from .Group import Group
+from .Payment import Payment, PaymentStatus
+from .Refund import Refund
+from .Refer import Refer
+from .VerificationCode import VerificationCode
+from .SystemVariable import SystemVariable
+from .TiendaCourse import TiendaCourse
+from .PaymentResgister import PaymentRegister
 
-def init_app(app):
-    db.init_app(app)
-
-from .TiendaCourse import TiendaCourse
+__all__ = [
+    "Base",
+    "db",
+    "get_db",
+    "session_scope",
+    "User",
+    "TipoUsuario",
+    "Account",
+    "AccountType",
+    "Category",
+    "TipoCategoria",
+    "category_relations",
+    "Course",
+    "Message",
+    "Group",
+    "Payment",
+    "PaymentStatus",
+    "Refund",
+    "Refer",
+    "VerificationCode",
+    "SystemVariable",
+    "TiendaCourse",
+    "PaymentRegister",
+]

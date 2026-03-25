@@ -40,7 +40,7 @@ class TestUsersSecurityISO:
         """
         response = client.post("/profile")
         assert response.status_code == 401
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is False
 
     def test_user_by_google_id_requires_session(self, client):
@@ -50,7 +50,7 @@ class TestUsersSecurityISO:
         """
         response = client.get("/user/118070327157829661695")
         assert response.status_code == 401
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is False
 
     def test_user_by_google_id_seller_blocked(self, seller_client):
@@ -61,7 +61,7 @@ class TestUsersSecurityISO:
         """
         response = seller_client.get("/user/some_other_google_id")
         assert response.status_code == 403
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is False
 
 
@@ -82,7 +82,7 @@ class TestVerifyTokenISO:
             content_type="application/json"
         )
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is False
         assert "Token missing" in data["error"]
 
@@ -116,7 +116,7 @@ class TestVerifyTokenISO:
             content_type="application/json"
         )
         assert response.status_code == 401
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is False
 
     @patch("src.routes.users.SystemVariable")
@@ -159,7 +159,7 @@ class TestVerifyTokenISO:
             content_type="application/json"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is True
         assert data["user"]["email"] == "test@gmail.com"
         assert data["user"]["google_id"] == "test_google_id_123"
@@ -178,7 +178,7 @@ class TestLogoutISO:
         """
         response = authenticated_client.post("/logout")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is True
         assert "Sesión cerrada" in data["message"]
 
@@ -200,7 +200,7 @@ class TestValidateEmailISO:
             content_type="application/json"
         )
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "error"
 
     def test_validate_email_non_gmail(self, client):
@@ -214,7 +214,7 @@ class TestValidateEmailISO:
             content_type="application/json"
         )
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "error"
         assert "Gmail" in data["message"]
 
@@ -240,7 +240,7 @@ class TestValidateEmailISO:
             content_type="application/json"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "success"
         assert len(data["records"]) == 1
 
@@ -265,7 +265,7 @@ class TestValidateEmailISO:
             content_type="application/json"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "success"
         mock_repo.create_with_generated_id.assert_not_called()
 
@@ -306,7 +306,7 @@ class TestProfileISO:
 
         response = authenticated_client.post("/profile")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is True
 
     @patch("src.routes.users.user_repository")
@@ -320,5 +320,5 @@ class TestProfileISO:
 
         response = authenticated_client.post("/profile")
         assert response.status_code == 404
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is False

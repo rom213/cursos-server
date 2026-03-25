@@ -9,7 +9,7 @@ from models.User import User
 from models.Refund import Refund
 from models.Payment import Payment
 from datetime import datetime
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, String
 from typing import List, Dict, Any
 
 
@@ -58,29 +58,26 @@ class RefundQueryService:
                     Refer.google_id.ilike(search_pattern),
                     User.name.ilike(search_pattern),
                     User.email.ilike(search_pattern),
-                    func.cast(Refund.value, db.String).ilike(search_pattern),
-                    func.cast(Refer.value, db.String).ilike(search_pattern)
+                    func.cast(Refund.value, String).ilike(search_pattern),
+                    func.cast(Refer.value, String).ilike(search_pattern)
                 )
             )
         
         # Ordenar por fecha descendente (más recientes primero)
         query = query.distinct().order_by(Refund.created_at.desc())
-        
-        # Aplicar paginación
-        pagination = query.paginate(
-            page=page,
-            per_page=per_page,
-            error_out=False
-        )
-        
+
+        total = query.count()
+        pages = (total + per_page - 1) // per_page if per_page else 0
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+
         return {
-            "records": pagination.items,
-            "total": pagination.total,
-            "pages": pagination.pages,
-            "current_page": pagination.page,
-            "per_page": pagination.per_page,
-            "has_next": pagination.has_next,
-            "has_prev": pagination.has_prev
+            "records": items,
+            "total": total,
+            "pages": pages,
+            "current_page": page,
+            "per_page": per_page,
+            "has_next": page < pages,
+            "has_prev": page > 1,
         }
         
     @classmethod

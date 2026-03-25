@@ -1,12 +1,17 @@
-from . import db
 from datetime import datetime
 
+from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from database import Base
 
 
-class Message(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    message = db.Column(db.String(100), nullable=False)
-    google_id = db.Column(db.String(100), db.ForeignKey('user.google_id'), nullable=True)
-    category_id= db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
-    stars = db.Column(db.Integer, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+class Message(Base):
+    __tablename__ = "message"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    message: Mapped[str] = mapped_column(String(100), nullable=False)
+    google_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("user.google_id"), nullable=True)
+    category_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("category.id"), nullable=True)
+    stars: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

@@ -1,57 +1,44 @@
-from flask import Blueprint, request, jsonify, session, send_from_directory
 from datetime import datetime
-from servises.refund import refund_model
-from servises.sail.sail_model import ReferQueryService
-from models.account import AccountType
-import os
 
-# Blueprint para refund
-sail_bp = Blueprint("sail", __name__)
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from database import get_db
+from servises.sail.sail_model import ReferQueryService
+from utils.auth import get_google_id
+
+router = APIRouter(tags=["sail"])
 
 
 def serialize_refer(refer):
-        return {
-            "porcetage_refund": refer.porcentage,
-            "affiliaty": "manual",
-            "category_bought": refer.payment.category.titulo,
-            "category_price": refer.payment.price,
-            "refund_price": refer.value,
-            "created_at": refer.created_at,
-            
-            # --- CAMBIOS AQUÍ ---
-            # Comprueba si el objeto 'refund' existe
-            "is_refund": refer.refund is not None, 
-            "refer_id": refer.id,
-            
-            # Asigna la imagen SÓLO SI 'refer.refund' no es None,
-            # de lo contrario, asigna None.
-            "baucher_image": refer.refund.image if refer.refund else None
-            # --- FIN DE CAMBIOS ---
-        }
+    return {
+        "porcetage_refund": refer.porcentage,
+        "affiliaty": "manual",
+        "category_bought": refer.payment.category.titulo,
+        "category_price": refer.payment.price,
+        "refund_price": refer.value,
+        "created_at": refer.created_at,
+        "is_refund": refer.refund is not None,
+        "refer_id": refer.id,
+        "baucher_image": refer.refund.image if refer.refund else None,
+    }
 
 
-
-# Endpoint: Obtener refunds por usuario y fechas
-@sail_bp.route("/sails", methods=["GET"])
-def get_refunds_by_user_and_date():
-    date_init = request.args.get("date_init")
-    date_end = request.args.get("date_end")
-
-
-    if "user" not in session:
-        return jsonify({"success": False, "error": "No ha iniciado sesión"}), 401
-
-    user_google_id = session["user"]["google_id"]
-
-    if not all([date_init, date_end]):
-        return jsonify({"error": "Faltan parámetros requeridos"}), 400
+@router.get("/sails")
+def get_refunds_by_user_and_date(
+    date_init: str = Query(...),
+    date_end: str = Query(...),
+    google_id: str = Depends(get_google_id),
+    db: Session = Depends(get_db),
+):
+    if not date_init or not date_end:
+        raise HTTPException(status_code=400, detail="Faltan parámetros requeridos")
 
     try:
         dt_init = datetime.fromisoformat(date_init)
         dt_end = datetime.fromisoformat(date_end)
     except ValueError:
-        return jsonify({"error": "Fechas inválidas. Usa formato YYYY-MM-DD"}), 400
+        raise HTTPException(status_code=400, detail="Fechas inválidas. Usa formato YYYY-MM-DD")
 
-    results = ReferQueryService.get_by_user_and_date(user_google_id, dt_init, dt_end)
-    
-    return jsonify([serialize_refer(ref) for ref in results]), 200
+    results = ReferQueryService.get_by_user_and_date(google_id, dt_init, dt_end)
+    return [serialize_refer(ref) for ref in results]

@@ -1,14 +1,18 @@
-from . import db
+from sqlalchemy import Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
-class SystemVariable(db.Model):
-    __tablename__ = 'system_variables'
+from database import Base
 
-    id = db.Column(db.Integer, primary_key=True)
-    descripcion = db.Column(db.String(255), nullable=True)
-    dato = db.Column(db.String(255), nullable=False)
-    observacion = db.Column(db.Text, nullable=True)
-    tabla = db.Column(db.String(100), nullable=True)
-    campo_codigo = db.Column(db.String(100), unique=True, nullable=False)
+
+class SystemVariable(Base):
+    __tablename__ = "system_variables"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    descripcion: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dato: Mapped[str] = mapped_column(String(255), nullable=False)
+    observacion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tabla: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    campo_codigo: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
     def __init__(self, campo_codigo, dato, descripcion=None, observacion=None, tabla=None):
         self.campo_codigo = campo_codigo
@@ -24,5 +28,5 @@ class SystemVariable(db.Model):
             "dato": self.dato,
             "descripcion": self.descripcion,
             "observacion": self.observacion,
-            "tabla": self.tabla
+            "tabla": self.tabla,
         }

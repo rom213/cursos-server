@@ -1,147 +1,142 @@
-from flask import Blueprint, request, jsonify, session
+from fastapi import APIRouter, Depends, HTTPException, Query
+
 from servises.categories.category_model import CategoryModel
-from models.Course import Course
 from models.TiendaCourse import TiendaCourse
 from spellchecker import SpellChecker
-from sqlalchemy.orm import joinedload
-from sqlalchemy import or_, and_, cast, Integer
-from sqlalchemy.sql import func
+from sqlalchemy import Integer, cast, func, or_, and_
+from utils.auth import get_token_payload_optional
 
 try:
-    spell = SpellChecker(language='es')
-    
-    # Añade aquí todas las palabras raras, plataformas o extranjerismos que no quieres que se "corrijan"
+    spell = SpellChecker(language="es")
     custom_words = [
-        'platzi', 'crehana', 'udemy', 'domestika', 'hotmart', 'coderhouse', 'edteam',
-        'trading', 'marketing', 'cripto', 'criptomonedas', 'bitcoin', 'blockchain',
-        'ecommerce', 'dropshipping', 'amazon', 'fba', 'seo', 'sem', 'copywriting',
-        'python', 'javascript', 'react', 'vue', 'angular', 'excel', 'powerbi', 
-        'masterclass', 'bootcamp', 'startup', 'software', 'backend', 'frontend'
+        "platzi", "crehana", "udemy", "domestika", "hotmart", "coderhouse", "edteam",
+        "trading", "marketing", "cripto", "criptomonedas", "bitcoin", "blockchain",
+        "ecommerce", "dropshipping", "amazon", "fba", "seo", "sem", "copywriting",
+        "python", "javascript", "react", "vue", "angular", "excel", "powerbi",
+        "masterclass", "bootcamp", "startup", "software", "backend", "frontend",
     ]
     spell.word_frequency.load_words(custom_words)
-    # Darle altísima prioridad a estas palabras del negocio
-    # para que "plazi" se corrija a "platzi" y no a "plazo" (una palabra normal).
     for cw in custom_words:
         spell.word_frequency._dictionary[cw] = 10000000
-
 except Exception:
     spell = None
 
 
+router = APIRouter(tags=["category"])
 
-category_bp = Blueprint("category", __name__)
 
-
-@category_bp.route("/all-categories", methods=["GET"])
-def all_categories():
-    limit = request.args.get("limit", default=6, type=int)
-    offset = request.args.get("offset", default=0, type=int)
-
-    if limit is None or limit <= 0:
-        limit = 6
-    if offset is None or offset < 0:
-        offset = 0
+@router.get("/all-categories")
+def all_categories(
+    limit: int = Query(6, ge=1),
+    offset: int = Query(0, ge=0),
+    payload: dict | None = Depends(get_token_payload_optional),
+):
+    viewer_gid = (payload or {}).get("google_id") if payload else None
+    uc = (payload or {}).get("country") if payload else None
 
     categories = (
-        CategoryModel.query
-        .order_by(CategoryModel.id.desc())
+        CategoryModel.query.order_by(CategoryModel.id.desc())
         .offset(offset)
         .limit(limit)
         .all()
     )
-    data = [category.to_dict(light=True) for category in categories]
-    return jsonify(data)
+    return [
+        c.to_dict(light=True, user_country=uc, viewer_google_id=viewer_gid)
+        for c in categories
+    ]
 
-@category_bp.route("/<int:category_id>", methods=["GET"])
-def get_category_by_id(category_id):
+
+@router.get("/{category_id}")
+def get_category_by_id(
+    category_id: int,
+    payload: dict | None = Depends(get_token_payload_optional),
+):
+    uc = (payload or {}).get("country") if payload else None
+    viewer_gid = (payload or {}).get("google_id") if payload else None
+
     category = CategoryModel.query.get(category_id)
     if not category:
-        return jsonify({"message": "Category not found"}), 404
-        
-    return jsonify(category.to_dict(light=False))
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    return category.to_dict(light=False, user_country=uc, viewer_google_id=viewer_gid)
 
 
+@router.get("/categories/deep-search")
+def deep_search(
+    q: str = "",
+    limit: int | None = 5,
+    payload: dict | None = Depends(get_token_payload_optional),
+):
+    _ = payload
+    if not q:
+        return []
 
-@category_bp.route('/categories/deep-search', methods=['GET'])
-def deep_search():
-    search_term = request.args.get('q', '')
-    if search_term:
-        limit = request.args.get('limit', type=int) or 5
-        
-        words = search_term.split()
-        conditions = []
-        score_terms = []
-        
-        # Exact match bonus para el término entero
-        score_terms.append(cast(func.lower(TiendaCourse.titulo) == search_term.lower(), Integer) * 50)
-        score_terms.append(cast(func.lower(TiendaCourse.autor) == search_term.lower(), Integer) * 30)
-        
-        for word in words:
-            # Corrección ortográfica
-            corrected_word = spell.correction(word) if spell else word
-            
-            # Condición para la palabra original
+    limit = limit or 5
+    search_term = q
+    words = search_term.split()
+    conditions = []
+    score_terms = []
+
+    score_terms.append(cast(func.lower(TiendaCourse.titulo) == search_term.lower(), Integer) * 50)
+    score_terms.append(cast(func.lower(TiendaCourse.autor) == search_term.lower(), Integer) * 30)
+
+    for word in words:
+        corrected_word = spell.correction(word) if spell else word
+
+        word_condition = or_(
+            func.lower(TiendaCourse.titulo).ilike(f"%{word.lower()}%"),
+            func.lower(TiendaCourse.autor).ilike(f"%{word.lower()}%"),
+            func.lower(TiendaCourse.pack_nombre).ilike(f"%{word.lower()}%"),
+            func.lower(TiendaCourse.keywords).ilike(f"%{word.lower()}%"),
+        )
+
+        score_terms.append(cast(func.lower(TiendaCourse.titulo).ilike(f"%{word.lower()}%"), Integer) * 10)
+        score_terms.append(cast(func.lower(TiendaCourse.autor).ilike(f"%{word.lower()}%"), Integer) * 8)
+        score_terms.append(cast(func.lower(TiendaCourse.pack_nombre).ilike(f"%{word.lower()}%"), Integer) * 5)
+        score_terms.append(cast(func.lower(TiendaCourse.keywords).ilike(f"%{word.lower()}%"), Integer) * 2)
+
+        if corrected_word and corrected_word != word:
             word_condition = or_(
-                func.lower(TiendaCourse.titulo).ilike(f"%{word.lower()}%"),
-                func.lower(TiendaCourse.autor).ilike(f"%{word.lower()}%"),
-                func.lower(TiendaCourse.pack_nombre).ilike(f"%{word.lower()}%"),
-                func.lower(TiendaCourse.keywords).ilike(f"%{word.lower()}%")
+                word_condition,
+                func.lower(TiendaCourse.titulo).ilike(f"%{corrected_word.lower()}%"),
+                func.lower(TiendaCourse.autor).ilike(f"%{corrected_word.lower()}%"),
+                func.lower(TiendaCourse.pack_nombre).ilike(f"%{corrected_word.lower()}%"),
+                func.lower(TiendaCourse.keywords).ilike(f"%{corrected_word.lower()}%"),
             )
-            
-            # Puntuación por la palabra original
-            score_terms.append(cast(func.lower(TiendaCourse.titulo).ilike(f"%{word.lower()}%"), Integer) * 10)
-            score_terms.append(cast(func.lower(TiendaCourse.autor).ilike(f"%{word.lower()}%"), Integer) * 8)
-            score_terms.append(cast(func.lower(TiendaCourse.pack_nombre).ilike(f"%{word.lower()}%"), Integer) * 5)
-            score_terms.append(cast(func.lower(TiendaCourse.keywords).ilike(f"%{word.lower()}%"), Integer) * 2)
-            
-            # Si el corrector sugirió algo diferente, ampliamos la búsqueda
-            if corrected_word and corrected_word != word:
-                word_condition = or_(
-                    word_condition,
-                    func.lower(TiendaCourse.titulo).ilike(f"%{corrected_word.lower()}%"),
-                    func.lower(TiendaCourse.autor).ilike(f"%{corrected_word.lower()}%"),
-                    func.lower(TiendaCourse.pack_nombre).ilike(f"%{corrected_word.lower()}%"),
-                    func.lower(TiendaCourse.keywords).ilike(f"%{corrected_word.lower()}%")
-                )
-                # Puntuación menor para la palabra corregida
-                score_terms.append(cast(func.lower(TiendaCourse.titulo).ilike(f"%{corrected_word.lower()}%"), Integer) * 8)
-                score_terms.append(cast(func.lower(TiendaCourse.autor).ilike(f"%{corrected_word.lower()}%"), Integer) * 6)
-                score_terms.append(cast(func.lower(TiendaCourse.pack_nombre).ilike(f"%{corrected_word.lower()}%"), Integer) * 4)
-                score_terms.append(cast(func.lower(TiendaCourse.keywords).ilike(f"%{corrected_word.lower()}%"), Integer) * 1)
-                
-            conditions.append(word_condition)
-        
-        # Búsqueda combinada: todos los términos (originales o corregidos) deben coincidir
-        query = TiendaCourse.query.filter(and_(*conditions)).distinct()
+            score_terms.append(cast(func.lower(TiendaCourse.titulo).ilike(f"%{corrected_word.lower()}%"), Integer) * 8)
+            score_terms.append(cast(func.lower(TiendaCourse.autor).ilike(f"%{corrected_word.lower()}%"), Integer) * 6)
+            score_terms.append(cast(func.lower(TiendaCourse.pack_nombre).ilike(f"%{corrected_word.lower()}%"), Integer) * 4)
+            score_terms.append(cast(func.lower(TiendaCourse.keywords).ilike(f"%{corrected_word.lower()}%"), Integer) * 1)
 
-        # Ordenar resultados por relevancia (los más exactos primero)
-        relevance_score = sum(score_terms)
-        query = query.order_by(relevance_score.desc())
+        conditions.append(word_condition)
 
-        query = query.limit(limit)
-        courses = query.all()
-        
-        # Adaptar respuesta para el componente header.search.component.vue
-        results = []
-        for course in courses:
-            # Buscar la imagen en la categoría usando el pilar_id
-            categoria = None
-            if course.pilar_id and course.pilar_id.isdigit():
-                categoria = CategoryModel.query.get(int(course.pilar_id))
-            
-            imagen_url = categoria.imagen_url if categoria and getattr(categoria, 'imagen_url', None) else "https://cdn-icons-png.flaticon.com/512/3145/3145765.png"
+    query = TiendaCourse.query.filter(and_(*conditions)).distinct()
 
-            results.append({
+    relevance_score = sum(score_terms)
+    query = query.order_by(relevance_score.desc()).limit(limit)
+    courses = query.all()
+
+    results = []
+    for course in courses:
+        categoria = None
+        if course.pilar_id and str(course.pilar_id).isdigit():
+            categoria = CategoryModel.query.get(int(course.pilar_id))
+
+        imagen_url = (
+            categoria.imagen_url
+            if categoria and getattr(categoria, "imagen_url", None)
+            else "https://cdn-icons-png.flaticon.com/512/3145/3145765.png"
+        )
+
+        results.append(
+            {
                 "id": course.pilar_id,
                 "titulo": course.titulo,
                 "imagen_url": imagen_url,
                 "autor": course.autor,
                 "pack_nombre": course.pack_nombre,
-                "cantidad_cursos": course.pack_cantidad_cursos
-            })
-            
-        return jsonify(results)
-    
-    return jsonify([])
-    
-    
+                "cantidad_cursos": course.pack_cantidad_cursos,
+            }
+        )
+
+    return results

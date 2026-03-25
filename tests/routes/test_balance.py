@@ -41,7 +41,7 @@ class TestBalanceSecurityISO:
             "/api/balance?date_init=2024-01-01&date_end=2024-12-31"
         )
         assert response.status_code == 401
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is False
 
 
@@ -73,7 +73,7 @@ class TestBalancePersonalISO:
             "/api/balance?date_init=2024-01-01&date_end=2024-12-31"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["count"] == 5
         assert data["non_refunded_value"] == 250000
 
@@ -94,7 +94,7 @@ class TestBalancePersonalISO:
             "/api/balance?date_init=2024-01-01&date_end=2024-12-31"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "ERROR"
 
 
@@ -123,7 +123,7 @@ class TestBalanceGlobalISO:
             "/api/balance/all?date_init=2024-01-01&date_end=2024-12-31"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "success"
         assert data["records"][0]["count"] == 100
 
@@ -155,6 +155,6 @@ class TestBalanceByUserISO:
             "?date_init=2024-01-01&date_end=2024-12-31"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "success"
         assert data["records"][0]["count"] == 10

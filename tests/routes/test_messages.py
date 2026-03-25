@@ -50,7 +50,7 @@ class TestGetMessagesISO:
 
         response = client.get("/all-messages/1")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["is_login"] is False
         assert isinstance(data["messages"], list)
 
@@ -83,7 +83,7 @@ class TestGetMessagesISO:
 
         response = authenticated_client.get("/all-messages/1")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["is_login"] is True
         assert data["is_comment"] is True
         # El primer mensaje debe ser el del usuario autenticado

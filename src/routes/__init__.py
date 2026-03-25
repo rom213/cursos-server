@@ -1,29 +1,27 @@
-from .users import users_bp
-from .payments import payments_bp
-from .groups import group_bp
-from .messages import message_bp
-from .category import category_bp
-from .account import account_bp
-from .refund import refund_bp
-from .balance import balance_bp
-from .sail import sail_bp
-from .managmentAdmin import managmentAdmin_bp
-from .auth import auth_bp
+from fastapi import FastAPI
 
-def init_app(app):
-    app.register_blueprint(users_bp, url_prefix='')
-    app.register_blueprint(payments_bp, url_prefix='')
-    app.register_blueprint(message_bp, url_prefix='')
-    app.register_blueprint(category_bp, url_prefix='/api/category')
-    app.register_blueprint(group_bp, url_prefix='/api/groups')
-    app.register_blueprint(account_bp, url_prefix='/account')
-    app.register_blueprint(refund_bp, url_prefix='/api')
-    app.register_blueprint(balance_bp, url_prefix='/api')
-    app.register_blueprint(sail_bp, url_prefix='/api')
-    app.register_blueprint(managmentAdmin_bp, url_prefix='/api/managment')
-    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+from .users import router as users_router
+from .payments import router as payments_router
+from .groups import router as groups_router
+from .messages import router as messages_router
+from .category import router as category_router
+from .account import router as account_router
+from .refund import router as refund_router
+from .balance import router as balance_router
+from .sail import router as sail_router
+from .managmentAdmin import router as managment_router
+from .auth import router as auth_router
 
-    # app.register_blueprint(group_messages_bp, url_prefix='/groupMessages')
-    # app.register_blueprint(messages_bp, url_prefix='/messages')
-    # app.register_blueprint(states_bp, url_prefix='/states')
-    # socketio.init_app(app)
+
+def init_app(app: FastAPI) -> None:
+    app.include_router(users_router)
+    app.include_router(payments_router)
+    app.include_router(messages_router)
+    app.include_router(category_router, prefix="/api/category")
+    app.include_router(groups_router, prefix="/api/groups")
+    app.include_router(account_router, prefix="/account")
+    app.include_router(refund_router, prefix="/api")
+    app.include_router(balance_router, prefix="/api")
+    app.include_router(sail_router, prefix="/api")
+    app.include_router(managment_router, prefix="/api/managment")
+    app.include_router(auth_router, prefix="/api/auth")
