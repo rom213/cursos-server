@@ -4,6 +4,7 @@ from servises.categories.category_model import CategoryModel
 from models.TiendaCourse import TiendaCourse
 from spellchecker import SpellChecker
 from sqlalchemy import Integer, cast, func, or_, and_
+from sqlalchemy.orm import selectinload
 from utils.auth import get_token_payload_optional
 
 try:
@@ -35,7 +36,9 @@ def all_categories(
     uc = (payload or {}).get("country") if payload else None
 
     categories = (
-        CategoryModel.query.order_by(CategoryModel.id.desc())
+        CategoryModel.query
+        .options(selectinload(CategoryModel.related_categories))
+        .order_by(CategoryModel.id.desc())
         .offset(offset)
         .limit(limit)
         .all()
@@ -54,7 +57,12 @@ def get_category_by_id(
     uc = (payload or {}).get("country") if payload else None
     viewer_gid = (payload or {}).get("google_id") if payload else None
 
-    category = CategoryModel.query.get(category_id)
+    category = (
+        CategoryModel.query
+        .options(selectinload(CategoryModel.related_categories))
+        .filter(CategoryModel.id == category_id)
+        .first()
+    )
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
 

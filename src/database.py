@@ -1,14 +1,14 @@
 """
-SQLAlchemy 2.0 — sesión por petición con ContextVar para compatibilidad con `db.session`
-usado en servicios (migración desde Flask-SQLAlchemy).
+SQLAlchemy 2.0 — sesion por peticion con ContextVar (compatible con async/sync handlers y workers).
 """
 from __future__ import annotations
 
-import contextvars
 from contextlib import contextmanager
-from typing import Any, Generator, Optional
+from contextvars import ContextVar
+from typing import Any, Generator
 
-from sqlalchemy import create_engine
+import pymysql.err
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from config import settings
@@ -24,27 +24,47 @@ def _database_url() -> str:
 engine = create_engine(
     _database_url(),
     pool_pre_ping=True,
+    pool_recycle=1800,
+    pool_size=10,
+    max_overflow=20,
     echo=settings.DEBUG,
 )
 
+
+_PYMYSQL_DISCONNECT_CODES = {
+    2006,   # MySQL server has gone away
+    2013,   # Lost connection to MySQL server during query
+    2055,   # Lost connection to MySQL server at '%s', system error: %d
+}
+
+
+@event.listens_for(engine, "handle_error")
+def _handle_db_protocol_error(ctx) -> None:
+    """Descarta del pool conexiones con errores de protocolo o desconexion MySQL."""
+    exc = ctx.original_exception
+    if isinstance(exc, (pymysql.err.InternalError, pymysql.err.InterfaceError)):
+        ctx.is_disconnect = True
+    elif isinstance(exc, pymysql.err.OperationalError):
+        code = exc.args[0] if exc.args else None
+        if code in _PYMYSQL_DISCONNECT_CODES:
+            ctx.is_disconnect = True
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# ContextVar: misma sesión que `get_db` dentro de cada petición
-_session_ctx: contextvars.ContextVar[Optional[Session]] = contextvars.ContextVar(
-    "db_session", default=None
-)
+_current_session: ContextVar[Session | None] = ContextVar("_current_session", default=None)
 
 
 class DBProxy:
-    """Sustituye `db` de Flask-SQLAlchemy: `db.session` → sesión de la petición actual."""
+    """Sustituye `db` de Flask-SQLAlchemy: `db.session` -> sesion de la peticion actual."""
 
     @property
     def session(self) -> Session:
-        s = _session_ctx.get()
+        s = _current_session.get()
         if s is None:
             raise RuntimeError(
-                "No hay sesión de base de datos en contexto. "
-                "Use Depends(get_db) en la ruta o ejecute dentro de get_db()."
+                "No hay sesion de base de datos en contexto. "
+                "Asegurese de que DBSessionMiddleware esta activo."
             )
         return s
 
@@ -53,7 +73,7 @@ db = DBProxy()
 
 
 class QueryProperty:
-    """Compatibilidad con `Model.query` (patrón Flask-SQLAlchemy)."""
+    """Compatibilidad con `Model.query` (patron Flask-SQLAlchemy)."""
 
     def __get__(self, instance: Any, owner: type) -> Any:
         if owner is None:
@@ -66,26 +86,62 @@ class Base(DeclarativeBase):
 
 
 def get_db() -> Generator[Session, None, None]:
-    session = SessionLocal()
-    token = _session_ctx.set(session)
-    try:
-        yield session
-    finally:
-        _session_ctx.reset(token)
-        session.close()
+    """
+    FastAPI dependency. Si el middleware ya establecio una sesion, la reutiliza.
+    Si no, crea una propia (fallback para CLI, scripts o tests directos).
+    """
+    s = _current_session.get()
+    if s is not None:
+        yield s
+    else:
+        session = SessionLocal()
+        token = _current_session.set(session)
+        try:
+            yield session
+        finally:
+            _current_session.reset(token)
+            session.close()
 
 
 @contextmanager
 def session_scope():
-    """Para BackgroundTasks / workers: misma semántica que `db.session` + commit al salir."""
+    """Para BackgroundTasks / workers: crea su propia sesion aislada con commit al salir."""
     session = SessionLocal()
-    token = _session_ctx.set(session)
+    token = _current_session.set(session)
     try:
         yield session
-        session.commit()
+        if session.is_active:
+            session.commit()
+        else:
+            session.rollback()
     except Exception:
-        session.rollback()
+        try:
+            session.rollback()
+        except Exception:
+            pass
         raise
     finally:
-        _session_ctx.reset(token)
+        _current_session.reset(token)
         session.close()
+
+
+class DBSessionMiddleware:
+    """
+    ASGI middleware: crea una sesion SQLAlchemy por peticion HTTP
+    y la almacena en un ContextVar visible para todos los handlers sync/async.
+    """
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        session = SessionLocal()
+        token = _current_session.set(session)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            _current_session.reset(token)
+            session.close()

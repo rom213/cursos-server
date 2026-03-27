@@ -6,8 +6,8 @@ from pathlib import Path
 from json_repair import repair_json
 from sqlalchemy import inspect, text
 
-from app import app
-from models import db
+import models  # noqa: F401 — registra todos los modelos en Base.metadata
+from database import Base, engine, SessionLocal
 from models.Category import Category, category_relations
 
 
@@ -20,7 +20,7 @@ INVALID_ESCAPE_PATTERN = re.compile(r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})')
 DEFAULT_JSON_PATH = (
     Path(__file__).resolve().parents[2]
     / "documentacion_tecnica"
-    / "estructurasimple_final (3).json"
+    / "estructurasimple_final (3) (2).json"
 )
 
 
@@ -76,8 +76,8 @@ def flatten_subfolders(payload):
     return categories
 
 
-def ensure_category_schema():
-    inspector = inspect(db.engine)
+def ensure_category_schema(session):
+    inspector = inspect(engine)
     existing_columns = {column["name"] for column in inspector.get_columns("category")}
 
     required_json_columns = [
@@ -89,16 +89,16 @@ def ensure_category_schema():
 
     for column_name in required_json_columns:
         if column_name not in existing_columns:
-            db.session.execute(
+            session.execute(
                 text(f"ALTER TABLE category ADD COLUMN {column_name} JSON NULL")
             )
 
-    db.session.commit()
+    session.commit()
 
 
-def replace_categories(category_rows):
-    db.session.execute(category_relations.delete())
-    Category.query.delete(synchronize_session=False)
+def replace_categories(session, category_rows):
+    session.execute(category_relations.delete())
+    session.query(Category).delete(synchronize_session=False)
 
     categories_by_id = {}
     pending_relations = {}
@@ -134,11 +134,11 @@ def replace_categories(category_rows):
             seccion_lista_completa=row.get("seccion_lista_completa", {}),
         )
 
-        db.session.add(category)
+        session.add(category)
         categories_by_id[category_id] = category
         pending_relations[category_id] = row.get("cat_rel", [])
 
-    db.session.flush()
+    session.flush()
 
     relation_links = 0
     missing_relation_refs = []
@@ -165,7 +165,7 @@ def replace_categories(category_rows):
                 source.related_categories.append(target)
                 relation_links += 1
 
-    db.session.commit()
+    session.commit()
     return {
         "created_categories": len(categories_by_id),
         "relation_links": relation_links,
@@ -193,10 +193,11 @@ def main():
     payload = read_json_file(json_path)
     category_rows = flatten_subfolders(payload)
 
-    with app.app_context():
-        db.create_all()
-        ensure_category_schema()
-        result = replace_categories(category_rows)
+    Base.metadata.create_all(bind=engine)
+
+    with SessionLocal() as session:
+        ensure_category_schema(session)
+        result = replace_categories(session, category_rows)
 
     print(f"JSON procesado: {json_path}")
     print(f"Categorias creadas: {result['created_categories']}")

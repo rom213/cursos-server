@@ -79,7 +79,6 @@ class TestVerifyTokenISO:
         response = client.post(
             "/verify-token",
             json={},
-            content_type="application/json"
         )
         assert response.status_code == 400
         data = response.json()
@@ -94,7 +93,6 @@ class TestVerifyTokenISO:
         response = client.post(
             "/verify-token",
             json={"token": ""},
-            content_type="application/json"
         )
         assert response.status_code == 400
 
@@ -113,7 +111,6 @@ class TestVerifyTokenISO:
         response = client.post(
             "/verify-token",
             json={"token": "token_invalido_completamente"},
-            content_type="application/json"
         )
         assert response.status_code == 401
         data = response.json()
@@ -156,7 +153,6 @@ class TestVerifyTokenISO:
         response = client.post(
             "/verify-token",
             json={"token": "token_google_valido"},
-            content_type="application/json"
         )
         assert response.status_code == 200
         data = response.json()
@@ -197,7 +193,6 @@ class TestValidateEmailISO:
         response = client.post(
             "/validate-email",
             json={},
-            content_type="application/json"
         )
         assert response.status_code == 400
         data = response.json()
@@ -211,7 +206,6 @@ class TestValidateEmailISO:
         response = client.post(
             "/validate-email",
             json={"email": "usuario@hotmail.com"},
-            content_type="application/json"
         )
         assert response.status_code == 400
         data = response.json()
@@ -237,7 +231,6 @@ class TestValidateEmailISO:
         response = client.post(
             "/validate-email",
             json={"email": "nuevo@gmail.com"},
-            content_type="application/json"
         )
         assert response.status_code == 200
         data = response.json()
@@ -262,7 +255,6 @@ class TestValidateEmailISO:
         response = client.post(
             "/validate-email",
             json={"email": "existente@gmail.com"},
-            content_type="application/json"
         )
         assert response.status_code == 200
         data = response.json()

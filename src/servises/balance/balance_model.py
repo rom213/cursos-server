@@ -1,4 +1,3 @@
-from flask import session
 from models.Refer import Refer
 from models.Payment import Payment
 from sqlalchemy import and_

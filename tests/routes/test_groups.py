@@ -1,5 +1,6 @@
 """Pruebas — grupos (FastAPI)."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -90,9 +91,14 @@ class TestRemoveMemberISO:
         mock_instance = mock_repo.return_value
         mock_instance.eliminar_miembro_grupo.return_value = True
 
-        response = client.delete(
+        body = json.dumps(
+            {"group_email": "g@test.com", "member_email": "m@test.com"}
+        )
+        response = client.request(
+            "DELETE",
             "/api/groups/remove-member",
-            json={"group_email": "g@test.com", "member_email": "m@test.com"},
+            content=body,
+            headers={"Content-Type": "application/json"},
         )
         assert response.status_code == 200
 
@@ -106,8 +112,13 @@ class TestRemoveMemberISO:
         mock_instance = mock_repo.return_value
         mock_instance.eliminar_miembro_grupo.return_value = False
 
-        response = client.delete(
+        body = json.dumps(
+            {"group_email": "g@test.com", "member_email": "m@test.com"}
+        )
+        response = client.request(
+            "DELETE",
             "/api/groups/remove-member",
-            json={"group_email": "g@test.com", "member_email": "m@test.com"},
+            content=body,
+            headers={"Content-Type": "application/json"},
         )
         assert response.status_code == 400

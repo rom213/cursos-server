@@ -38,7 +38,7 @@ def all_balance_categories(
             "list_ids_refers": summary["list_ids_refers"],
         }
     except Exception:
-        raise HTTPException(status_code=200, detail="KO")
+        return {"status": "ERROR", "message": "KO", "records": []}
 
 
 @router.get("/balance/user/{google_id_param}")

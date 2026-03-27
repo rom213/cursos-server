@@ -18,12 +18,12 @@ from pathlib import Path
 
 from json_repair import repair_json
 
-from app import app
-from models import db
+import models  # noqa: F401 — registra todos los modelos en Base.metadata
+from database import Base, engine, SessionLocal
 from models.Category import Category
 from models.Group import Group
 
-# Mismo criterio que load_categories_from_json para JSON “sucios”
+# Mismo criterio que load_categories_from_json para JSON "sucios"
 CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 INVALID_ESCAPE_PATTERN = re.compile(r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})')
 
@@ -89,7 +89,7 @@ def _fit_text(value, max_len, field_label, strict, truncatable):
     return text[:max_len], f"{field_label} truncado de {len(text)} a {max_len} caracteres"
 
 
-def upsert_groups_from_rows(rows, strict=False):
+def upsert_groups_from_rows(session, rows, strict=False):
     """
     Inserta o actualiza por group_mail. Omite filas con categoría inexistente o datos inválidos.
     """
@@ -160,14 +160,14 @@ def upsert_groups_from_rows(rows, strict=False):
             skipped += 1
             continue
 
-        if db.session.get(Category, resolved_cat) is None:
+        if session.get(Category, resolved_cat) is None:
             errors.append(
                 f"Fila {index} group_mail={group_mail!r}: no existe category.id={resolved_cat}"
             )
             skipped += 1
             continue
 
-        existing = Group.query.filter_by(group_mail=group_mail).first()
+        existing = session.query(Group).filter_by(group_mail=group_mail).first()
         if existing:
             existing.name = name
             existing.description = description
@@ -175,7 +175,7 @@ def upsert_groups_from_rows(rows, strict=False):
             existing.category_id = resolved_cat
             updated += 1
         else:
-            db.session.add(
+            session.add(
                 Group(
                     name=name,
                     group_mail=group_mail,
@@ -186,7 +186,7 @@ def upsert_groups_from_rows(rows, strict=False):
             )
             created += 1
 
-    db.session.commit()
+    session.commit()
     return {
         "created": created,
         "updated": updated,
@@ -221,9 +221,10 @@ def main():
     if not isinstance(payload, list):
         raise ValueError("El JSON debe ser un array de objetos")
 
-    with app.app_context():
-        db.create_all()
-        result = upsert_groups_from_rows(payload, strict=args.strict)
+    Base.metadata.create_all(bind=engine)
+
+    with SessionLocal() as session:
+        result = upsert_groups_from_rows(session, payload, strict=args.strict)
 
     print(f"JSON procesado: {json_path}")
     print(f"Creados: {result['created']}, actualizados: {result['updated']}, omitidos: {result['skipped']}")

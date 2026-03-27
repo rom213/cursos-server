@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=Path(__file__).resolve().parent.parent / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     MAIL_DEFAULT_SENDER: str = ""
     ADMIN_EMAIL: str = "romarioariza@gmail.com"
 
-    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_ID: str = "569719966413-vb4hran623dj2mj7urgumsc6u5627dmb.apps.googleusercontent.com"
 
     REFUND_PERCENTAGE: float = 30.0
 
@@ -43,8 +43,8 @@ class Settings(BaseSettings):
 
     # PayPal (preferir variables de entorno; valores por defecto vacíos)
     PAYPAL_MODE: str = "sandbox"
-    PAYPAL_CLIENT_ID: str = ""
-    PAYPAL_CLIENT_SECRET: str = ""
+    PAYPAL_CLIENT_ID: str = "Aew9PIGagtvhZ6jRQc83QvG5_c7HwBiDH80DMHJuYIl5py8i9U94o_VeayP1H26zvO6V3rfKK-GqyS4b"
+    PAYPAL_CLIENT_SECRET: str = "EOBT3PiVBjI3pSUDXKnn01b3FlGsjtLlnrHzoTvtnx21Pygm4cVUBgcsjjLtI6wCYh3Rc4Uc_6cli7l-"
 
     CELERY_BROKER_URL: str | None = None
     CELERY_RESULT_BACKEND: str | None = None

@@ -154,14 +154,26 @@ async def save_img_from_upload(image: UploadFile) -> str | None:
 
 @router.get("/refunds")
 def get_refunds_by_date(
-    date_init: str = Query(...),
-    date_end: str = Query(...),
+    date_init: str | None = Query(None),
+    date_end: str | None = Query(None),
     search: str = Query(""),
-    page: int = Query(1, ge=1),
+    page: int = Query(1),
     per_page: int = Query(10, ge=1, le=100),
     db_session: Session = Depends(get_db),
 ):
     try:
+        if not date_init or not date_end:
+            raise HTTPException(
+                status_code=400,
+                detail="Las fechas date_init y date_end son obligatorias",
+            )
+
+        if page < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="El parámetro page debe ser mayor o igual a 1",
+            )
+
         try:
             dt_init = datetime.strptime(date_init, "%Y-%m-%d")
             dt_end = datetime.strptime(date_end, "%Y-%m-%d")
@@ -240,21 +252,47 @@ def get_refund_by_id(refund_id: str, db_session: Session = Depends(get_db)):
 
 @router.post("/refunds", status_code=201)
 async def create_refund(
-    verification_code: str = Form(...),
-    type_acc_em: str = Form(...),
-    type_acc_re: str = Form(...),
-    titular_acc_em: str = Form(...),
-    titular_acc_res: str = Form(...),
-    number_acc_em: str = Form(...),
-    value: str = Form(...),
-    code_reference: str = Form(...),
-    refer_id: str = Form(...),
-    image: UploadFile = File(...),
+    verification_code: str | None = Form(None),
+    type_acc_em: str | None = Form(None),
+    type_acc_re: str | None = Form(None),
+    titular_acc_em: str | None = Form(None),
+    titular_acc_res: str | None = Form(None),
+    number_acc_em: str | None = Form(None),
+    value: str | None = Form(None),
+    code_reference: str | None = Form(None),
+    refer_id: str | None = Form(None),
+    image: UploadFile | None = File(None),
     db_session: Session = Depends(get_db),
 ):
+    if not verification_code or not str(verification_code).strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Debe proporcionar el código de verificación",
+        )
+
     is_valid, message = AuthService.verify_code(settings.ADMIN_EMAIL, verification_code)
     if not is_valid:
         raise HTTPException(status_code=400, detail=message)
+
+    required_fields = {
+        "type_acc_em": type_acc_em,
+        "type_acc_re": type_acc_re,
+        "titular_acc_em": titular_acc_em,
+        "titular_acc_res": titular_acc_res,
+        "number_acc_em": number_acc_em,
+        "value": value,
+        "code_reference": code_reference,
+        "refer_id": refer_id,
+    }
+    missing = [k for k, v in required_fields.items() if v is None or str(v).strip() == ""]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Faltan campos requeridos: {', '.join(missing)}",
+        )
+
+    if image is None or not getattr(image, "filename", None):
+        raise HTTPException(status_code=400, detail="La imagen es requerida")
 
     form_data = {
         "type_acc_em": type_acc_em,
@@ -306,24 +344,53 @@ async def create_refund(
 
 @router.post("/mass-payment", status_code=201)
 async def create_mass_payment(
-    verification_code: str = Form(...),
-    google_id: str = Form(...),
-    date_init: str = Form(...),
-    date_end: str = Form(...),
-    type_acc_em: str = Form(...),
-    type_acc_re: str = Form(...),
-    titular_acc_em: str = Form(...),
-    titular_acc_res: str = Form(...),
-    number_acc_res: str = Form(...),
-    number_acc_em: str = Form(...),
-    code_reference: str = Form(...),
-    list_ids_refers: str = Form(...),
-    image: UploadFile = File(...),
+    verification_code: str | None = Form(None),
+    google_id: str | None = Form(None),
+    date_init: str | None = Form(None),
+    date_end: str | None = Form(None),
+    type_acc_em: str | None = Form(None),
+    type_acc_re: str | None = Form(None),
+    titular_acc_em: str | None = Form(None),
+    titular_acc_res: str | None = Form(None),
+    number_acc_res: str | None = Form(None),
+    number_acc_em: str | None = Form(None),
+    code_reference: str | None = Form(None),
+    list_ids_refers: str | None = Form(None),
+    image: UploadFile | None = File(None),
     db_session: Session = Depends(get_db),
 ):
+    if not verification_code or not str(verification_code).strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Debe proporcionar el código de verificación",
+        )
+
     is_valid, message = AuthService.verify_code(settings.ADMIN_EMAIL, verification_code)
     if not is_valid:
         raise HTTPException(status_code=400, detail=message)
+
+    required_mass = {
+        "google_id": google_id,
+        "date_init": date_init,
+        "date_end": date_end,
+        "type_acc_em": type_acc_em,
+        "type_acc_re": type_acc_re,
+        "titular_acc_em": titular_acc_em,
+        "titular_acc_res": titular_acc_res,
+        "number_acc_res": number_acc_res,
+        "number_acc_em": number_acc_em,
+        "code_reference": code_reference,
+        "list_ids_refers": list_ids_refers,
+    }
+    missing_mass = [k for k, v in required_mass.items() if v is None or str(v).strip() == ""]
+    if missing_mass:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Faltan campos requeridos: {', '.join(missing_mass)}",
+        )
+
+    if image is None or not getattr(image, "filename", None):
+        raise HTTPException(status_code=400, detail="La imagen es requerida")
 
     try:
         dt_init = datetime.strptime(date_init, "%Y-%m-%d")

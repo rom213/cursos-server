@@ -123,7 +123,6 @@ class TestCreateRefundISO:
         response = client.post(
             "/api/managment/refunds",
             data={"type_acc_em": "nequi"},
-            content_type="multipart/form-data",
         )
         assert response.status_code == 400
         data = response.json()
@@ -148,11 +147,10 @@ class TestCreateRefundISO:
                 "verification_code": "000000",
                 "type_acc_em": "nequi",
             },
-            content_type="multipart/form-data",
         )
         assert response.status_code == 400
 
-    @patch("routes.managmentAdmin.save_img")
+    @patch("routes.managmentAdmin.save_img_from_upload")
     @patch("routes.managmentAdmin.validate_refer")
     @patch("routes.managmentAdmin.ReferModel")
     @patch("routes.managmentAdmin.AuthService")
@@ -174,7 +172,6 @@ class TestCreateRefundISO:
                 "type_acc_em": "nequi",
                 # Faltan: type_acc_re, titular_acc_em, etc.
             },
-            content_type="multipart/form-data",
         )
         assert response.status_code == 400
 
@@ -338,7 +335,6 @@ class TestMassPaymentISO:
         response = client.post(
             "/api/managment/mass-payment",
             data={"google_id": "test123"},
-            content_type="multipart/form-data",
         )
         assert response.status_code == 400
         data = response.json()
@@ -361,6 +357,5 @@ class TestMassPaymentISO:
                 "verification_code": "000000",
                 "google_id": "test123",
             },
-            content_type="multipart/form-data",
         )
         assert response.status_code == 400

@@ -57,6 +57,8 @@ def add_member(
     if isinstance(cart_data, list):
         for item in cart_data:
             response = GroupRepository.process_member_addition("agregar_miembro_grupo", data=item)
+    if response.get("status") == "error":
+        raise HTTPException(status_code=400, detail=response.get("error"))
     return response
 
 
@@ -73,6 +75,8 @@ def add_member_time(
             response = GroupRepository.process_member_addition(
                 "agregar_miembro_grupo_time", data=item
             )
+    if response.get("status") == "error":
+        raise HTTPException(status_code=400, detail=response.get("error"))
     return response
 
 

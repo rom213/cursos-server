@@ -8,18 +8,46 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 import paypalrestsdk
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+import logging
+import colorlog
+
 from config import settings
-from models import get_db
+from database import Base, DBSessionMiddleware, engine
+import models  # noqa: F401 — registra todos los modelos en Base.metadata
 from routes import init_app
+
+
+def _setup_logging() -> None:
+    handler = colorlog.StreamHandler()
+    handler.setFormatter(
+        colorlog.ColoredFormatter(
+            "%(log_color)s%(levelname)-8s%(reset)s %(cyan)s%(name)s%(reset)s — %(message)s",
+            log_colors={
+                "DEBUG":    "white",
+                "INFO":     "green",
+                "WARNING":  "yellow",
+                "ERROR":    "red",
+                "CRITICAL": "bold_red",
+            },
+        )
+    )
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.handlers.clear()
+    root.addHandler(handler)
+
+
+_setup_logging()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
     paypalrestsdk.configure(
         {
             "mode": settings.PAYPAL_MODE,
@@ -33,16 +61,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Cursos Estudia y Trabaja API",
     lifespan=lifespan,
-    dependencies=[Depends(get_db)],
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://localhost:5173"],
+    allow_origins=["http://localhost:3001", "http://localhost:5173","http://192.168.1.7:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(DBSessionMiddleware)
 
 init_app(app)
 
@@ -56,12 +84,22 @@ async def _compat_http_errors(request: Request, exc: HTTPException):
     if exc.status_code == 400:
         return JSONResponse(
             status_code=400,
-            content={"success": False, "error": msg},
+            content={
+                "success": False,
+                "error": msg,
+                "status": "error",
+                "message": msg,
+            },
         )
     if exc.status_code == 404:
         return JSONResponse(
             status_code=404,
-            content={"success": False, "error": msg},
+            content={
+                "success": False,
+                "error": msg,
+                "status": "error",
+                "message": msg,
+            },
         )
     if exc.status_code in (401, 403):
         return JSONResponse(

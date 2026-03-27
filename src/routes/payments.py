@@ -6,7 +6,7 @@ from typing import Any
 
 import paypalrestsdk
 import requests
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -51,9 +51,14 @@ def parse_data(dat: str, reference_sale: str, pay_value: str) -> list:
     parsed = []
     for item in items:
         parts = item.split(",")
+        try:
+            category_id = int(parts[0].replace(".", ""))
+        except (ValueError, IndexError):
+            logger.warning("parse_data: category_id inválido — valor recibido: %r", parts[0] if parts else dat)
+            continue
         parsed.append(
             {
-                "category_id": int(parts[0]),
+                "category_id": category_id,
                 "google_id": parts[1] if len(parts) > 1 else None,
                 "google_id_refer": parts[2] if len(parts) > 2 else None,
                 "reference_code": reference_sale,
@@ -246,7 +251,6 @@ def process_paypal_payment(data: dict) -> None:
             payer_id = (
                 resource.get("payer", {}).get("payer_info", {}).get("payer_id")
             )
-
             register_payment: list = []
             for item in resource.get("transactions", []):
                 register_code = item.get("description")
@@ -255,7 +259,8 @@ def process_paypal_payment(data: dict) -> None:
             registros_parceados = generar_objeto_para_guardar_registros(
                 register_payment, payment_id
             )
-
+            
+            
             revisar_y_guardar_informacion_de_pago(registros_parceados)
             registrar_pago_pagado(register_payment)
             verificar_y_actualizar_vendedor(registros_parceados)
@@ -382,7 +387,7 @@ async def payu_confirmation(request: Request, background_tasks: BackgroundTasks)
 
         required = ["merchant_id", "reference_sale", "value", "currency", "state_pol", "sign"]
         if not all(data.get(f) for f in required):
-            return {"error": "Missing parameters"}, 400
+            raise HTTPException(status_code=400, detail="Missing parameters")
 
         transaction_status = "approved" if data.get("state_pol") == "4" else "rejected"
         background_tasks.add_task(process_payu_transaction, data)
@@ -392,6 +397,8 @@ async def payu_confirmation(request: Request, background_tasks: BackgroundTasks)
             "transaction_status": transaction_status,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in payu_confirmation: {e}")
         return {"message": "Confirmation received", "transaction_status": "error"}
@@ -401,6 +408,11 @@ async def payu_confirmation(request: Request, background_tasks: BackgroundTasks)
 async def paypal_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(
+                status_code=422,
+                detail="El cuerpo JSON debe ser un objeto",
+            )
         event_type = data.get("event_type")
 
         if event_type == "PAYMENTS.PAYMENT.CREATED":
@@ -424,9 +436,11 @@ async def paypal_webhook(request: Request, background_tasks: BackgroundTasks):
 
         return {"status": "ignored", "event": event_type}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in paypal_webhook: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/payu-firm")

@@ -49,8 +49,8 @@ class TestAccountSecurityISO:
                 "cellphone": "3009876543",
             },
         )
-        # Sin sesión, session["user"] lanza KeyError → except → 501
-        assert response.status_code == 501
+        # Sin JWT, FastAPI devuelve 401 (antes Flask capturaba KeyError → 501)
+        assert response.status_code == 401
 
 
 # =========================================================================

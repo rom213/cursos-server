@@ -100,6 +100,7 @@ class GoogleTokenVerifier(TokenVerifier):
             idinfo = id_token.verify_oauth2_token(
                 token, google_requests.Request(), self.client_id
             )
+            
             return {
                 "user_id": idinfo.get("sub"),
                 "email": idinfo.get("email"),
@@ -211,6 +212,7 @@ def verify_token(
         raise HTTPException(status_code=400, detail="Token missing")
 
     country = who_is_my_country(None)
+    print(token)
     result, success = auth_service.authenticate(token, country)
     if not success:
         raise HTTPException(status_code=401, detail=result["error"])

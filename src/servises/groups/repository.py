@@ -1,6 +1,8 @@
-from flask import  request, jsonify
+import logging
 import requests
 from googleapiclient.errors import HttpError
+
+logger = logging.getLogger(__name__)
 
 from servises.categories.category_model import CategoryModel
 from servises.groups.admin_directory_client import ejecutar_con_reintento_401
@@ -44,21 +46,18 @@ class GroupRepository:
                 )
 
             result = ejecutar_con_reintento_401(_insert)
-            print("Miembro agregado con éxito:")
+            logger.info("Miembro agregado con éxito (time): %s", self.member_email)
             self.eliminar_member_minutes()
             return result
         except HttpError as e:
             if getattr(e.resp, "status", None) == 409:
-                print(
-                    "El usuario ya es miembro de este grupo en Google (409). "
-                    "Se considera éxito."
+                logger.info(
+                    "Usuario %s ya es miembro del grupo (409). Se considera éxito.",
+                    self.member_email,
                 )
                 return {"status": "already_member"}
-            print(f"Error: {e.resp.status if e.resp else ''}")
-            print(e.reason)
-            raw = getattr(e, "content", None)
-            if raw:
-                print(raw.decode(errors="replace"))
+            raw = getattr(e, "content", b"").decode(errors="replace")
+            logger.error("Error Google API [%s]: %s | %s", e.resp.status if e.resp else "?", e.reason, raw)
             return None
 
     def agregar_miembro_grupo(self):
@@ -74,41 +73,30 @@ class GroupRepository:
                 )
 
             result = ejecutar_con_reintento_401(_insert)
-            print("Miembro agregado con éxito:")
-            print(result)
+            logger.info("Miembro agregado con éxito: %s -> %s | resp: %s", self.member_email, self.group_email, result)
             return result
         except HttpError as e:
             if getattr(e.resp, "status", None) == 409:
-                print(
-                    "El usuario ya es miembro de este grupo en Google (409). "
-                    "Se considera éxito."
+                logger.info(
+                    "Usuario %s ya es miembro del grupo (409). Se considera éxito.",
+                    self.member_email,
                 )
                 return {"status": "already_member"}
-            print(f"Error: {e.resp.status if e.resp else ''}")
-            print(e.reason)
-            raw = getattr(e, "content", None)
-            if raw:
-                print(raw.decode(errors="replace"))
+            raw = getattr(e, "content", b"").decode(errors="replace")
+            logger.error("Error Google API [%s]: %s | %s", e.resp.status if e.resp else "?", e.reason, raw)
             return None
 
 
     def create_member_group_repo(data):
         category = CategoryModel.find(category_id=data["category_id"])
         if not category:
-            return (jsonify({"error": f"No existe la categoria"}), 400)
+            raise ValueError("No existe la categoria")
 
         # Grupo de Google asociado a la categoría comprada (no el "primer" grupo genérico)
         group = Group.query.filter_by(category_id=category.id).first()
 
         if group is None:
-            return (
-                jsonify(
-                    {
-                        "error": "No hay grupo configurado para esta categoría en la base de datos"
-                    }
-                ),
-                400,
-            )
+            raise ValueError("No hay grupo configurado para esta categoría en la base de datos")
         
         role = data.get("role", "MEMBER")
 
@@ -132,14 +120,11 @@ class GroupRepository:
                 return s.groups().insert(body=body).execute()
 
             result = ejecutar_con_reintento_401(_create)
-            print("Grupo creado con éxito:")
+            logger.info("Grupo creado con éxito: %s", self.group_email)
             return result
         except HttpError as e:
-            print(f"Error: {e.resp.status if e.resp else ''}")
-            print(e.reason)
-            raw = getattr(e, "content", None)
-            if raw:
-                print(raw.decode(errors="replace"))
+            raw = getattr(e, "content", b"").decode(errors="replace")
+            logger.error("Error Google API [%s]: %s | %s", e.resp.status if e.resp else "?", e.reason, raw)
             return None
 
     def eliminar_miembro_grupo(self):
@@ -151,20 +136,15 @@ class GroupRepository:
                 return True
 
             ejecutar_con_reintento_401(_delete)
-            print(
-                f"Miembro {self.member_email} eliminado con éxito del grupo {self.group_email}."
-            )
+            logger.info("Miembro %s eliminado del grupo %s.", self.member_email, self.group_email)
             return True
         except HttpError as e:
-            print(f"Error: {e.resp.status if e.resp else ''}")
-            print(e.reason)
-            raw = getattr(e, "content", None)
-            if raw:
-                print(raw.decode(errors="replace"))
+            raw = getattr(e, "content", b"").decode(errors="replace")
+            logger.error("Error Google API [%s]: %s | %s", e.resp.status if e.resp else "?", e.reason, raw)
             return False
         
     def eliminar_member_minutes(self):
-            print("vamos a eliminar")
+            logger.info("Programando eliminación temporal: %s del grupo %s", self.member_email, self.group_email)
             schedule_data = {
                 "group_email": self.group_email,
                 "member_email": self.member_email
@@ -201,7 +181,7 @@ class GroupRepository:
                 refer.payment_id = payment.id
                 refer.save()
 
-            return jsonify({"message": "El miembro fue creado satisfactoriamente"}), 200
+            return {"status": "success", "message": "El miembro fue creado satisfactoriamente"}
 
         except ValueError as ve:
             if payment:
@@ -209,24 +189,24 @@ class GroupRepository:
                 payment.save()
             else:
                 PaymentService.save_error_payment(data)
-            return jsonify({"error": str(ve)}), 404
-            
+            return {"status": "error", "error": str(ve)}
+
         except PermissionError as pe:
             if payment:
                 payment.status = PaymentStatus.ERROR
                 payment.save()
             else:
                 PaymentService.save_error_payment(data)
-            return jsonify({"error": str(pe)}), 423
-            
+            return {"status": "error", "error": str(pe)}
+
         except Exception as ex:
-            print(f"Error inesperado en process_member_addition: {ex}")
+            logger.error("Error inesperado en process_member_addition: %s", ex, exc_info=True)
             if payment:
                 payment.status = PaymentStatus.ERROR
                 payment.save()
             else:
                 PaymentService.save_error_payment(data)
-            return jsonify({"error": f"Error al agregar el miembro al grupo: {str(ex)}"}), 500
+            return {"status": "error", "error": f"Error al agregar el miembro al grupo: {str(ex)}"}
 
 
 
@@ -235,10 +215,6 @@ class GroupService:
     @staticmethod
     def add_member(method_name: str, data: dict):
         repo = GroupRepository.create_member_group_repo(data=data)
-        if isinstance(repo, tuple):
- 
-            return repo, None, None
-
         return repo, data.get("google_id"), data.get("google_id_refer")
     
 
@@ -278,8 +254,8 @@ class PaymentService:
             try:
                 values = cat.calc_price(descuento=0)
             except Exception as e:
-                print(e)
-
+                logger.error("Error calculando precio: %s", e)
+        # work
         payment = PaymentModel(
             status=PaymentStatus.ERROR,
             price=values.get("precio_final"),
@@ -315,8 +291,8 @@ class PaymentService:
                 info_error=data
             )
             payment.save()
-            print("Pago con error guardado exitosamente")
+            logger.info("Pago con error guardado exitosamente")
             return payment
         except Exception as e:
-            print(f"Error critico al guardar pago fallido: {e}")
+            logger.error("Error crítico al guardar pago fallido: %s", e)
             return None
