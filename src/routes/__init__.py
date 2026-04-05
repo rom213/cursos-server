@@ -11,6 +11,7 @@ from .balance import router as balance_router
 from .sail import router as sail_router
 from .managmentAdmin import router as managment_router
 from .auth import router as auth_router
+from .chatbot import router as chatbot_router
 
 
 def init_app(app: FastAPI) -> None:
@@ -25,3 +26,4 @@ def init_app(app: FastAPI) -> None:
     app.include_router(sail_router, prefix="/api")
     app.include_router(managment_router, prefix="/api/managment")
     app.include_router(auth_router, prefix="/api/auth")
+    app.include_router(chatbot_router)
