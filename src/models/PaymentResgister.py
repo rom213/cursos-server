@@ -10,7 +10,7 @@ class PaymentRegister(Base):
     __tablename__ = "payment_register"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    pay_value_refer: Mapped[str] = mapped_column(String(100), nullable=False)
+    pay_val: Mapped[str] = mapped_column(String(100), nullable=False)
     google_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("user.google_id"), nullable=True)
     google_id_refer: Mapped[str | None] = mapped_column(String(100), ForeignKey("user.google_id"), nullable=True)
     category_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("category.id"), nullable=True)

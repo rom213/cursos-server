@@ -37,6 +37,12 @@ def update(
             user = UserModel.get_by_google_id(google_id=google_id)
             user.update(num_whatsapp=cellphone)
 
+        # Update codigo_referido if provided
+        codigo_referido = data.get("codigo_referido")
+        if codigo_referido and codigo_referido != "null":
+            user = UserModel.get_by_google_id(google_id=google_id)
+            user.update(codigo_referido=codigo_referido)
+
         return {"status": "succes"}
     except Exception as e:
         print(e)

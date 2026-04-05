@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import get_db
 from models.SystemVariable import SystemVariable
-from models.User import User
+from models.User import User, TipoUsuario
 from models import db
 from servises.Users.user_model import UserModel
 from models.account import Account
@@ -32,7 +32,7 @@ def where_is_my_ip_from_headers(headers: dict) -> str | None:
 def who_is_my_country(ip_address: str | None) -> str | None:
     try:
         if ip_address:
-            response = requests.get("https://ipinfo.io/24.152.58.172/json", timeout=3)
+            response = requests.get(ip_address, timeout=3)
             if response.status_code == 200:
                 return response.json().get("country")
     except Exception as e:
@@ -76,6 +76,7 @@ class UserRepository:
             name=name,
             picture="https://lh3.googleusercontent.com/a/default-user",
         )
+        new_user.tipo_usuario = TipoUsuario.TERCERO
         db.session.add(new_user)
         db.session.commit()
         return new_user
@@ -211,8 +212,8 @@ def verify_token(
     if not token:
         raise HTTPException(status_code=400, detail="Token missing")
 
-    country = who_is_my_country(None)
-    print(token)
+    country = who_is_my_country(where_is_my_ip_from_headers)
+    
     result, success = auth_service.authenticate(token, country)
     if not success:
         raise HTTPException(status_code=401, detail=result["error"])
@@ -230,6 +231,7 @@ def verify_token(
         "prefix": num_whatsapp.split()[0] if num_whatsapp and len(num_whatsapp.split()) > 0 else "+57",
         "num_whatsapp": num_whatsapp.split()[1] if num_whatsapp and len(num_whatsapp.split()) > 1 else "",
         "name": user.name,
+        "vista_previa_drive": user.vista_previa_drive,
         "given_name": user.name.split()[0],
         "picture": user.picture,
         "is_bought": UserModel.is_vendedor(google_id=user.google_id),
@@ -274,10 +276,12 @@ def profile(
     user_payload = {
         "google_id": user.google_id,
         "accounts": accounts,
+        "vista_previa_drive": user.vista_previa_drive,
         "email": user.email,
         "num_whatsapp": num_whatsapp.split()[0] if num_whatsapp and len(num_whatsapp.split()) > 0 else "",
         "prefix": num_whatsapp.split()[1] if num_whatsapp and len(num_whatsapp.split()) > 1 else "+57",
         "name": user.name,
+        "codigo_referido":user.codigo_referido,
         "given_name": user.name.split()[0],
         "picture": user.picture,
         "is_bought": UserModel.is_vendedor(google_id=user.google_id),

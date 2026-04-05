@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = "569719966413-vb4hran623dj2mj7urgumsc6u5627dmb.apps.googleusercontent.com"
 
     REFUND_PERCENTAGE: float = 30.0
+    DESCUENTO_VENDEDOR: int = 60
 
     # PayU
     PAYU_URL: str = ""
@@ -45,6 +46,19 @@ class Settings(BaseSettings):
     PAYPAL_MODE: str = "sandbox"
     PAYPAL_CLIENT_ID: str = "Aew9PIGagtvhZ6jRQc83QvG5_c7HwBiDH80DMHJuYIl5py8i9U94o_VeayP1H26zvO6V3rfKK-GqyS4b"
     PAYPAL_CLIENT_SECRET: str = "EOBT3PiVBjI3pSUDXKnn01b3FlGsjtLlnrHzoTvtnx21Pygm4cVUBgcsjjLtI6wCYh3Rc4Uc_6cli7l-"
+
+    # Wompi
+    
+
+    WOMPI_PUBLIC_KEY: str = "pub_test_XUEWY6VWRhhtUOFvHBky1b48HutWyp3A"
+    WOMPI_INTEGRITY_SECRET: str = "test_integrity_Z7B0TYW4pU8BVmGs4cZvbCEPONUOwaR0"
+    WOMPI_ENVIRONMENT: str = "sandbox"
+
+    @property
+    def WOMPI_API_BASE_URL(self) -> str:
+        if self.WOMPI_ENVIRONMENT == "production":
+            return "https://production.wompi.co/v1"
+        return "https://sandbox.wompi.co/v1"
 
     CELERY_BROKER_URL: str | None = None
     CELERY_RESULT_BACKEND: str | None = None

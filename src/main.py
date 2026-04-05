@@ -65,7 +65,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://localhost:5173","http://192.168.1.7:3001"],
+    allow_origins=["http://localhost:3001", "http://localhost:4173","http://192.168.1.24:3001","http://192.168.0.105:4173", "http://192.168.1.24:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,7 +89,7 @@ async def _compat_http_errors(request: Request, exc: HTTPException):
                 "error": msg,
                 "status": "error",
                 "message": msg,
-            },
+            },  
         )
     if exc.status_code == 404:
         return JSONResponse(

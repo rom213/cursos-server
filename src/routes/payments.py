@@ -3,7 +3,7 @@ import hashlib
 import logging
 import uuid
 from typing import Any
-
+import os
 import paypalrestsdk
 import requests
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
@@ -39,7 +39,7 @@ paypalrestsdk.configure(
 )
 
 router = APIRouter(tags=["payments"])
-
+descuento_vendedor = float(os.getenv("DESCUENTO_VENDEDOR"))
 
 # ==========================================
 # HELPERS
@@ -62,7 +62,7 @@ def parse_data(dat: str, reference_sale: str, pay_value: str) -> list:
                 "google_id": parts[1] if len(parts) > 1 else None,
                 "google_id_refer": parts[2] if len(parts) > 2 else None,
                 "reference_code": reference_sale,
-                "pay_value_refer": pay_value,
+                "pay_val": pay_value,
             }
         )
     return parsed
@@ -73,6 +73,7 @@ def calculate_total_price_and_items(
     google_id: str = "118070327157829661695",
     google_id_refer: str | None = None,
     porcentaje_descuento: float = 0,
+    es_vendedor: bool= False
 ) -> tuple:
     total_price = 0.0
     payment_items = []
@@ -81,16 +82,22 @@ def calculate_total_price_and_items(
     for category in categories:
         id_category = category.get("id_category")
         cat = CategoryModel.get_by_id(category_id=id_category)
-        values = cat.calc_price(descuento=porcentaje_descuento)
-        price = values.get("precio_final")
+        if es_vendedor:
+            precio_con_descuento_vendedor = cat.calcular_precio_con_descuento(cat.precio, descuento_vendedor)
+            price = cat.calcular_precio_con_descuento(precio_con_descuento_vendedor, porcentaje_descuento)
+        else:
+            values = cat.calc_price(descuento=porcentaje_descuento)
+            price = values.get("precio_final")
+            
         total_price += price
-
+        
+        
         payment_items.append(
             {
                 "category_id": id_category,
                 "google_id": google_id,
                 "google_id_refer": google_id_refer,
-                "pay_value_refer": price,
+                "pay_val": price,
                 "moneda": "USD",
             }
         )
@@ -107,13 +114,17 @@ def calculate_total_price_and_items(
     return total_price, payment_items, paypal_items
 
 
-def calculate_total_price(categories: list, porcentaje_descuento: float = 0) -> float:
+def calculate_total_price(categories: list, porcentaje_descuento: float = 0, esVendedor:bool= False) -> float:
     total_price = 0.0
     for category in categories:
         id_category = category.get("id_category")
         cat = CategoryModel.get_by_id(category_id=id_category)
-        values = cat.calc_price(descuento=porcentaje_descuento)
-        total_price += values.get("precio_final")
+        if esVendedor== False:
+            values = cat.calc_price(descuento=porcentaje_descuento)
+            total_price += values.get("precio_final")
+        if esVendedor:
+            precio_con_descuento_vendedor = cat.calcular_precio_con_descuento(cat.precio, descuento_vendedor)
+            total_price += cat.calcular_precio_con_descuento(precio_con_descuento_vendedor, porcentaje_descuento)
     return total_price
 
 
@@ -129,7 +140,7 @@ def generar_objeto_para_guardar_registros(registros: list, payment_id: str) -> l
             "google_id": item.google_id,
             "google_id_refer": item.google_id_refer,
             "reference_code": payment_id,
-            "pay_value_refer": item.pay_value_refer,
+            "pay_val": item.pay_val,
         }
         for item in registros
     ]
@@ -156,11 +167,17 @@ def verificar_y_actualizar_vendedor(registros: list) -> None:
                 continue
             if category.tipo_categoria in target_categories:
                 user = UserModel.get_by_google_id(google_id)
-                if user and user.tipo_usuario != TipoUsuario.VENDEDOR:
+                if user and user.tipo_usuario != TipoUsuario.VENDEDOR and user.tipo_usuario != TipoUsuario.TERCERO:
                     logger.info(f"Actualizando usuario {google_id} a VENDEDOR")
                     user.update(tipo_usuario=TipoUsuario.VENDEDOR)
     except Exception as e:
         logger.error(f"Error al verificar/actualizar vendedor: {e}")
+
+
+def generate_wompi_integrity_signature(reference: str, amount_in_cents: int, currency: str) -> str:
+    integrity_secret = settings.WOMPI_INTEGRITY_SECRET
+    raw = f"{reference}{amount_in_cents}{currency}{integrity_secret}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 # ==========================================
@@ -259,15 +276,14 @@ def process_paypal_payment(data: dict) -> None:
             registros_parceados = generar_objeto_para_guardar_registros(
                 register_payment, payment_id
             )
-            
-            
-            revisar_y_guardar_informacion_de_pago(registros_parceados)
-            registrar_pago_pagado(register_payment)
-            verificar_y_actualizar_vendedor(registros_parceados)
 
+
+            
             payment = paypalrestsdk.Payment.find(payment_id)
             if payment.execute({"payer_id": payer_id}):
-                logger.info(f"PayPal payment {payment_id} captured successfully.")
+                revisar_y_guardar_informacion_de_pago(registros_parceados)
+                registrar_pago_pagado(register_payment)
+                verificar_y_actualizar_vendedor(registros_parceados)
             else:
                 logger.error(f"Failed to execute PayPal payment {payment_id}: {payment.error}")
 
@@ -278,8 +294,9 @@ def process_paypal_payment(data: dict) -> None:
 def generate_link_worker(categories: list, google_id: str) -> dict:
     with session_scope():
         try:
+            es_vendedor = UserModel.is_vendedor(google_id)
             precio, items, paypal_items = calculate_total_price_and_items(
-                categories, google_id=google_id, porcentaje_descuento=0
+                categories, google_id=google_id, porcentaje_descuento=0, es_vendedor=es_vendedor
             )
             rate = get_cop_to_usd_rate()
             precio_usd = precio * rate
@@ -327,12 +344,13 @@ def generate_link_coupon_worker(categories: list, google_id: str, cupon: str) ->
             user = UserModel.validar_cupon(cupon)
             if not user:
                 return {"status": "error", "message": "No tienes cupon", "code": 400}
-
+            es_vendedor = UserModel.is_vendedor(google_id)
             precio, items, paypal_items = calculate_total_price_and_items(
                 categories,
                 google_id=google_id,
                 google_id_refer=user.google_id,
                 porcentaje_descuento=user.descuento_referido,
+                es_vendedor=es_vendedor
             )
             rate = get_cop_to_usd_rate()
             precio_usd = precio * rate
@@ -372,6 +390,121 @@ def generate_link_coupon_worker(categories: list, google_id: str, cupon: str) ->
         except Exception as e:
             logger.error(f"Error PayPal Worker (Coupon): {e}")
             return {"status": "error", "message": "error", "code": 500}
+
+
+def generate_wompi_checkout_worker(categories: list, google_id_log: str, google_id_buy: str) -> dict:
+    with session_scope():
+        try:
+            es_vendedor = UserModel.is_vendedor(google_id_log)
+            precio, items, _ = calculate_total_price_and_items(
+                categories, google_id=google_id_buy, porcentaje_descuento=0, es_vendedor=es_vendedor
+            )
+
+            amount_in_cents = int(round(precio * 100))
+            currency = "COP"
+            ref_code = str(uuid.uuid4())[:20]
+
+            for item in items:
+                item["moneda"] = currency
+
+            PaymentRegisterRepository.create_pending(items, ref_code)
+
+            signature_integrity = generate_wompi_integrity_signature(
+                ref_code, amount_in_cents, currency
+            )
+
+            checkout_url = (
+                f"https://checkout.wompi.co/p/"
+                f"?public-key={settings.WOMPI_PUBLIC_KEY}"
+                f"&currency={currency}"
+                f"&amount-in-cents={amount_in_cents}"
+                f"&reference={ref_code}"
+                f"&signature:integrity={signature_integrity}"
+            )
+
+            return {"status": "success", "checkout_url": checkout_url}
+
+        except Exception as e:
+            logger.error(f"Error Wompi Worker: {e}")
+            return {"status": "error", "message": str(e), "code": 500}
+
+# work
+def generate_wompi_checkout_coupon_worker(categories: list, google_id: str, cupon: str) -> dict:
+    with session_scope():
+        try:
+            user = UserModel.validar_cupon(cupon)
+            es_vendedor = UserModel.is_vendedor(google_id)
+            if not user:
+                return {"status": "error", "message": "No tienes cupon", "code": 400}
+
+            precio, items, _ = calculate_total_price_and_items(
+                categories,
+                google_id=google_id,
+                google_id_refer=user.google_id,
+                es_vendedor= es_vendedor,
+                porcentaje_descuento=user.descuento_referido,
+            )
+
+            amount_in_cents = int(round(precio * 100))
+            currency = "COP"
+            ref_code = str(uuid.uuid4())[:20]
+
+            for item in items:
+                item["moneda"] = currency
+
+            PaymentRegisterRepository.create_pending(items, ref_code)
+
+            signature_integrity = generate_wompi_integrity_signature(
+                ref_code, amount_in_cents, currency
+            )
+
+            checkout_url = (
+                f"https://checkout.wompi.co/p/"
+                f"?public-key={settings.WOMPI_PUBLIC_KEY}"
+                f"&currency={currency}"
+                f"&amount-in-cents={amount_in_cents}"
+                f"&reference={ref_code}"
+                f"&signature:integrity={signature_integrity}"
+            )
+
+            return {"status": "success", "checkout_url": checkout_url}
+
+        except Exception as e:
+            logger.error(f"Error Wompi Worker (Coupon): {e}")
+            return {"status": "error", "message": str(e), "code": 500}
+
+
+def process_wompi_webhook(transaction_id: str) -> None:
+    with session_scope():
+        try:
+            url = f"{settings.WOMPI_API_BASE_URL}/transactions/{transaction_id}"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            tx_data = response.json().get("data", {})
+
+            status = tx_data.get("status")
+            reference = tx_data.get("reference")
+
+            if status != "APPROVED":
+                logger.info(f"Wompi transaction {transaction_id} not approved: {status}")
+                return
+
+            register_payment = PaymentRegisterRepository.getItemsPayment(reference)
+            if not register_payment:
+                logger.error(f"No pending registrations found for reference: {reference}")
+                return
+
+            registros_parceados = generar_objeto_para_guardar_registros(
+                register_payment, transaction_id
+            )
+            revisar_y_guardar_informacion_de_pago(registros_parceados)
+            registrar_pago_pagado(register_payment)
+            verificar_y_actualizar_vendedor(registros_parceados)
+
+            logger.info(f"Wompi transaction {transaction_id} processed successfully")
+
+        except Exception as e:
+            logger.error(f"Error processing Wompi webhook: {e}")
 
 
 # ==========================================
@@ -451,7 +584,8 @@ def payu_signature(
 ):
     try:
         categories = body["categories"]
-        precio = calculate_total_price(categories)
+        es_vendedor = UserModel.is_vendedor(google_id)
+        precio = calculate_total_price(categories, esVendedor=es_vendedor)
         firm = PaymentRespository(price=precio)
         firm.generate_firm()
         return {
@@ -476,8 +610,9 @@ def payu_signature_cupon(
         user_obj = UserModel.validar_cupon(cupon)
         if not user_obj:
             return {"message": "No tienes cupon"}
-
-        precio = calculate_total_price(categories, user_obj.descuento_referido)
+        google_id = user.get("google_id")
+        es_vendedor = UserModel.is_vendedor(google_id)
+        precio = calculate_total_price(categories, user_obj.descuento_referido, esVendedor=es_vendedor)
         descuento_aplicado = user_obj.descuento_referido
         firm = PaymentRespository(price=precio)
         firm.generate_firm()
@@ -578,3 +713,94 @@ async def paypal_generate_link_pay_external(body: dict = Body(...)):
     except Exception as e:
         logger.error(f"Error PayPal: {e}")
         return {"message": "error"}
+
+
+
+@router.post("/wompi-generate-link-pay")
+async def wompi_generate_link_pay(
+    body: dict = Body(...),
+    google_id: str = Depends(get_google_id),
+):
+    try:
+        categories = body["categories"]
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor, generate_wompi_checkout_worker, categories, google_id, google_id
+        )
+        if result["status"] == "success":
+            return {"approval_url": result["checkout_url"]}
+        return {"message": result.get("message", "Error")}
+    except Exception as e:
+        logger.error(f"Error Wompi: {e}")
+        return {"message": "error"}
+
+
+@router.post("/wompi-generate-link-pay-cupon")
+async def wompi_generate_link_pay_cupon(
+    body: dict = Body(...),
+    google_id: str = Depends(get_google_id),
+):
+    try:
+        categories = body["categories"]
+        cupon = body["cupon"]
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor, generate_wompi_checkout_coupon_worker, categories, google_id, cupon
+        )
+        if result["status"] == "success":
+            return {"approval_url": result["checkout_url"]}
+        return {"message": result.get("message", "Error")}
+    except Exception as e:
+        logger.error(f"Error Wompi Cupon: {e}")
+        return {"message": "error"}
+
+
+@router.post("/wompi-generate-link-pay-external")
+async def wompi_generate_link_pay_external(body: dict = Body(...), google_id: str = Depends(get_google_id)):
+    try:
+        categories = body["categories"]
+        google_id_buy = body["google_id_external"]
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor, generate_wompi_checkout_worker, categories, google_id, google_id_buy
+        )
+        if result["status"] == "success":
+            return {"approval_url": result["checkout_url"]}
+        return {"message": result.get("message", "Error")}
+    except Exception as e:
+        logger.error(f"Error Wompi: {e}")
+        return {"message": "error"}
+
+
+
+
+
+
+
+#work
+@router.post("/wompi/webhook")
+async def wompi_webhook(request: Request, background_tasks: BackgroundTasks):
+    try:
+        data = await request.json()
+        logger.info(data)
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=422, detail="El cuerpo JSON debe ser un objeto")
+
+        event = data.get("event")
+        tx_data = data.get("data", {}).get("transaction", {})
+        transaction_id = tx_data.get("id")
+
+        if event == "transaction.updated" and transaction_id:
+            background_tasks.add_task(process_wompi_webhook, transaction_id)
+            return {
+                "status": "processing",
+                "message": "Webhook received, processing in background",
+            }
+
+        return {"status": "ignored", "event": event}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in wompi_webhook: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

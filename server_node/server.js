@@ -33,8 +33,8 @@ app.post('/schedule', (req, res) => {
     });
   }
 
-  // Programar la eliminación en 10 minutos
-  const scheduledTime = new Date(Date.now() + 1 * 60 * 1000);
+  // Programar la eliminación en 1 minutos
+  const scheduledTime = new Date(Date.now() + 1 * 60 * 100);
 
   tareasPendientes.push({ group_email, member_email, scheduledTime });
   console.log(

@@ -9,7 +9,7 @@ class PaymentRegisterRepository:
         """
         for item in items:
             pr = PaymentRegister(
-                pay_value_refer=str(item["pay_value_refer"]),
+                pay_val=str(item["pay_val"]),
                 google_id=item["google_id"],
                 google_id_refer=item["google_id_refer"],
                 category_id=item["category_id"],

@@ -208,6 +208,28 @@ class GroupRepository:
                 PaymentService.save_error_payment(data)
             return {"status": "error", "error": f"Error al agregar el miembro al grupo: {str(ex)}"}
 
+    @staticmethod
+    def process_member_addition_time(data):
+        try:
+            repo, google_id, _ = GroupService.add_member("agregar_miembro_grupo_time", data)
+            
+            
+            
+            user = UserService.get_user_by_google_id(google_id)
+            UserModel.no_mas_vista_previa_drive(google_id)
+            repo.member_email = user.email
+            result = repo.agregar_miembro_grupo_time()
+            if result:
+                return {"status": "success", "message": "El miembro fue creado satisfactoriamente"}
+            return {"status": "error", "error": "No se pudo agregar el miembro al grupo"}
+        except ValueError as ve:
+            return {"status": "error", "error": str(ve)}
+        except PermissionError as pe:
+            return {"status": "error", "error": str(pe)}
+        except Exception as ex:
+            logger.error("Error inesperado en process_member_addition_time: %s", ex, exc_info=True)
+            return {"status": "error", "error": f"Error al agregar el miembro al grupo: {str(ex)}"}
+
 
 
 
@@ -234,7 +256,7 @@ class ReferService:
             return None
 
         refund_percentage = float(os.getenv("REFUND_PERCENTAGE"))
-        pay_value = float(data.get("pay_value_refer", "0"))
+        pay_value = float(data.get("pay_val", "0"))
         refund_value = (pay_value * refund_percentage) / 100
         refer = ReferModel(google_id=google_id_refer, value=refund_value, porcentage=refund_percentage)
         if not refer.verify():
@@ -258,7 +280,7 @@ class PaymentService:
         # work
         payment = PaymentModel(
             status=PaymentStatus.ERROR,
-            price=values.get("precio_final"),
+            price=data.get("pay_val"),
             is_refer=is_refer,
             category_id=data.get("category_id"),
             signature=data.get("reference_code"),

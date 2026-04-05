@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from models.Category import Category
 from models import db
 from datetime import datetime
-from models.Course import Course 
 from models.Payment import Payment
 from models.Message import Message
 from servises.payment.payment_repository import PaymentRespository
@@ -13,7 +12,7 @@ from models.SystemVariable import SystemVariable
 
 
 load_dotenv()
-
+descuento_vendedor = float(os.getenv("DESCUENTO_VENDEDOR"))
 class CategoryModel(Category):
     def __init__(self, url=None, title=None, frase_1=None, frase_2=None, imagen_url=None, num_per=None,
                  descuento=None, precio=None, duracion=None, delete_at=None, descuento_total_price=0):
@@ -81,13 +80,6 @@ class CategoryModel(Category):
             return False
         return Payment.query.filter(
             (Payment.google_id == viewer_google_id) & (Payment.category_id == self.id)
-        ).first() is not None
-
-    def user_is_any_bougth(self, viewer_google_id: str | None = None):
-        if not viewer_google_id:
-            return False
-        return Payment.query.filter(
-            Payment.google_id == viewer_google_id
         ).first() is not None
 
     def user_is_comment(self, viewer_google_id: str | None = None):
@@ -228,11 +220,27 @@ class CategoryModel(Category):
             "cantidad_cursos": len(all_cursos)
         }
 
+    _PILAR_SET = {100, 200, 300}
+
+    def _build_cat_rel_info(self):
+        if self.id in self._PILAR_SET:
+            return [{'id': c.id, 'titulo': c.titulo} for c in self.related_categories]
+        pilar_ids = set()
+        for c in self.related_categories:
+            if 101 <= c.id <= 107:   pilar_ids.add(100)
+            elif 201 <= c.id <= 207: pilar_ids.add(200)
+            elif 301 <= c.id <= 309: pilar_ids.add(300)
+        if not pilar_ids:
+            return []
+        pilares = CategoryModel.query.filter(CategoryModel.id.in_(pilar_ids)).all()
+        return [{'id': c.id, 'titulo': c.titulo} for c in sorted(pilares, key=lambda x: x.id)]
+
     def to_dict(
         self,
         light=False,
         user_country: str | None = None,
         viewer_google_id: str | None = None,
+        esVendedor: bool = False
     ):
         """Convierte la instancia en un diccionario para facilitar la serialización."""
 
@@ -243,22 +251,43 @@ class CategoryModel(Category):
         except (TypeError, ValueError):
             cambio_dolar = 1.0
             
-        if user_country == "CO":
-            precio = self.precio
+        if esVendedor:   
+            if user_country == "CO":
+                precio = self.calc_price(descuento_vendedor)
+            else:
+                precio = self.precio / cambio_dolar if cambio_dolar else self.precio
+                precio= self.calc_price(descuento_vendedor)
+        
+        if esVendedor == False:
+            if user_country == "CO":
+                precio = self.calc_price(0)
+            else:
+                precio = self.precio / cambio_dolar if cambio_dolar else self.precio
+                precio= self.calc_price(0)
+
+            
+        # Calcular cantidad de cursos sin cargar la lista completa
+        if self.seccion_lista_completa and self.seccion_lista_completa.get('lista_completa'):
+            cantidad_cursos = len(self.seccion_lista_completa['lista_completa'])
+        elif self.related_categories:
+            cantidad_cursos = sum(
+                len(rc.seccion_lista_completa.get('lista_completa', []))
+                for rc in self.related_categories
+                if rc.seccion_lista_completa
+            )
         else:
-            precio = self.precio / cambio_dolar if cambio_dolar else self.precio
+            cantidad_cursos = 0
+
         if light:
-            plataformas = {}
+            plataformas = {}    
             temas = {}
             lista_completa = {}
             pregunta_respuesta = []
-            courses = []
         else:
             plataformas = self.seccion_plataformas if self.seccion_plataformas and self.seccion_plataformas.get('plataformas') else self.get_aggregated_plataformas()
             temas = self.seccion_temas if self.seccion_temas and self.seccion_temas.get('temas') else self.get_aggregated_temas()
             lista_completa = self.seccion_lista_completa if self.seccion_lista_completa and self.seccion_lista_completa.get('lista_completa') else self.get_aggregated_lista_completa()
             pregunta_respuesta = self.pregunta_respuesta if self.pregunta_respuesta is not None else []
-            courses = [course.to_dict() for course in self.courses]
 
         return {
             'id': self.id,
@@ -269,16 +298,19 @@ class CategoryModel(Category):
             'imagen_url': self.imagen_url,
             'num_per': self.num_per,
             'cat_rel': [category.id for category in self.related_categories],
+            'cat_rel_info': self._build_cat_rel_info(),
             'pregunta_respuesta': pregunta_respuesta,
             'seccion_plataformas': plataformas,
             'seccion_temas': temas,
+            'cantidad_cursos': cantidad_cursos,
             'seccion_lista_completa': lista_completa,
             'descuento': self.descuento,
-            'precio': precio,
+            'precio': precio['precio_final'],
+            'precio_descontado': precio['descuento_aplicado'],
             'duracion': self.duracion,
             'user_bought': self.user_is_bought(viewer_google_id),
             'user_comment': self.user_is_comment(viewer_google_id),
-            'courses': courses,
+            'cupos_google':self.cupos_google,
             'delete_at': self.delete_at.isoformat() if self.delete_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

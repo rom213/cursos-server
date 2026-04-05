@@ -61,20 +61,18 @@ def add_member(
         raise HTTPException(status_code=400, detail=response.get("error"))
     return response
 
-
+# work
 @router.post("/add-member-time")
 def add_member_time(
     data: dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
 ):
     ValidateData.validate_request_data(required_fields=["extra1"], data=data)
-    cart_data = parse_data(data.get("extra1"), "kkkkkkkkkkkk")
+    cart_data = parse_data(data.get("extra1"), "1,118070327157829661695")
     response = {"error": "No se proporcionaron datos"}
     if isinstance(cart_data, list):
         for item in cart_data:
-            response = GroupRepository.process_member_addition(
-                "agregar_miembro_grupo_time", data=item
-            )
+            response = GroupRepository.process_member_addition_time(data=item)
     if response.get("status") == "error":
         raise HTTPException(status_code=400, detail=response.get("error"))
     return response

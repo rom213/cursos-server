@@ -3,7 +3,6 @@ from database import Base, db, get_db, session_scope
 from .User import User, TipoUsuario
 from .account import Account, AccountType
 from .Category import Category, TipoCategoria, category_relations
-from .Course import Course
 from .Message import Message
 from .Group import Group
 from .Payment import Payment, PaymentStatus
@@ -26,7 +25,6 @@ __all__ = [
     "Category",
     "TipoCategoria",
     "category_relations",
-    "Course",
     "Message",
     "Group",
     "Payment",

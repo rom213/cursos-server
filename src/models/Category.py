@@ -41,10 +41,10 @@ class Category(Base):
     descuento: Mapped[str] = mapped_column(String(20), default="0", nullable=False)
     precio: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duracion: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    cupos_google: Mapped[str | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     delete_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    courses = relationship("Course", backref="category", lazy=True)
 
     related_categories = relationship(
         "Category",

@@ -11,6 +11,7 @@ class TipoUsuario(enum.Enum):
     NUEVO = "nuevo"
     VENDEDOR = "vendedor"
     CUPON = "cupon"
+    TERCERO = "tercero"
 
 
 class User(Base):
@@ -25,6 +26,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     num_whatsapp: Mapped[str | None] = mapped_column(String(20), nullable=True)
     country: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    vista_previa_drive: Mapped[bool] = mapped_column(Integer, default=1)
     delete_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     codigo_referido: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)

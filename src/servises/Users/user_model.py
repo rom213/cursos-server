@@ -3,6 +3,10 @@ from models import db
 from servises.payment.payment_model import PaymentModel
 from datetime import datetime
 from models.account import Account
+import logging # <--- Primero importas el módulo estándar
+
+# Obtienes el logger específico que usa Uvicorn para errores
+logger = logging.getLogger("uvicorn.error")
 
 
 class UserModel(User):
@@ -34,10 +38,22 @@ class UserModel(User):
     @staticmethod
     def is_vendedor(google_id: str) -> bool:
         """Verifica si un usuario con el Google ID dado está registrado como vendedor."""
-        return UserModel.query.filter_by(
+        usu= UserModel.query.filter_by(
             google_id=google_id, 
             tipo_usuario=TipoUsuario.VENDEDOR
-        ).first() is not None
+        ).first()
+        return usu is not None
+    
+    @staticmethod
+    def no_mas_vista_previa_drive(google_id: str) -> bool:
+        """Verifica si un usuario con el Google ID dado está registrado como vendedor."""
+        usu = UserModel.query.filter_by(google_id=google_id).first()
+
+        usu.vista_previa_drive = 0
+
+        db.session.commit()
+
+        return usu is not None
     
     @staticmethod
     def get_by_email(email):
