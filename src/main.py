@@ -84,7 +84,7 @@ async def _compat_http_errors(request: Request, exc: HTTPException):
     if exc.status_code == 400:
         return JSONResponse(
             status_code=400,
-            content={
+            content={   
                 "success": False,
                 "error": msg,
                 "status": "error",
@@ -107,3 +107,13 @@ async def _compat_http_errors(request: Request, exc: HTTPException):
             content={"success": False, "error": msg},
         )
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+# 👇 AGREGA ESTO AL FINAL DEL ARCHIVO 👇
+if __name__ == "__main__":
+    import uvicorn
+    
+    # IMPORTANTE: Pasamos el objeto 'app' directamente, NO el string "main:app". 
+    # Nuitka funciona mucho mejor pasando el objeto de la aplicación cuando está compilado.
+    # Usamos el puerto 5002 que tenías en tus comentarios.
+    uvicorn.run(app, host="0.0.0.0", port=5002)

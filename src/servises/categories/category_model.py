@@ -240,16 +240,20 @@ class CategoryModel(Category):
         light=False,
         user_country: str | None = None,
         viewer_google_id: str | None = None,
-        esVendedor: bool = False
+        esVendedor: bool = False,
+        cambio_dolar: float | None = None
     ):
         """Convierte la instancia en un diccionario para facilitar la serialización."""
 
         user_country = (user_country or "").upper()
-        cambio_dolar_raw = SystemVariable.query.filter_by(campo_codigo="CAMBIO_DOLAR").first()
-        try:
-            cambio_dolar = float(cambio_dolar_raw.dato) if cambio_dolar_raw and cambio_dolar_raw.dato else 1.0
-        except (TypeError, ValueError):
-            cambio_dolar = 1.0
+
+        # Use provided cambio_dolar or fetch it (fallback)
+        if cambio_dolar is None:
+            cambio_dolar_raw = SystemVariable.query.filter_by(campo_codigo="CAMBIO_DOLAR").first()
+            try:
+                cambio_dolar = float(cambio_dolar_raw.dato) if cambio_dolar_raw and cambio_dolar_raw.dato else 1.0
+            except (TypeError, ValueError):
+                cambio_dolar = 1.0
             
         if esVendedor:   
             if user_country == "CO":
@@ -298,7 +302,7 @@ class CategoryModel(Category):
             'imagen_url': self.imagen_url,
             'num_per': self.num_per,
             'cat_rel': [category.id for category in self.related_categories],
-            'cat_rel_info': self._build_cat_rel_info(),
+            'cat_rel_info': [] if light else self._build_cat_rel_info(),
             'pregunta_respuesta': pregunta_respuesta,
             'seccion_plataformas': plataformas,
             'seccion_temas': temas,
@@ -309,8 +313,8 @@ class CategoryModel(Category):
             'precio_descontado': precio['descuento_aplicado'],
             'duracion': self.duracion,
             'user_bought': self.user_is_bought(viewer_google_id),
-            'user_comment': self.user_is_comment(viewer_google_id),
-            'cupos_google':self.cupos_google,
+            'user_comment': False if light else self.user_is_comment(viewer_google_id),
+            'cupos_google': self.cupos_google,
             'delete_at': self.delete_at.isoformat() if self.delete_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

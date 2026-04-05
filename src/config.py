@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# --- LÓGICA DINÁMICA PARA RUTAS ---
+# 1. Ruta en desarrollo (cuando ejecutas uvicorn desde src/)
+dev_env_path = Path(__file__).resolve().parent.parent / ".env"
+
+# 2. Ruta en producción/compilado (Nuitka): al lado del main.exe
+prod_env_path = Path(sys.argv[0]).resolve().parent / ".env"
+
+# 3. Decidimos cuál usar basándonos en si el archivo existe al lado del ejecutable
+ENV_PATH = prod_env_path if prod_env_path.exists() else dev_env_path
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parent.parent / ".env",
+        env_file=str(ENV_PATH),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -48,8 +58,6 @@ class Settings(BaseSettings):
     PAYPAL_CLIENT_SECRET: str = "EOBT3PiVBjI3pSUDXKnn01b3FlGsjtLlnrHzoTvtnx21Pygm4cVUBgcsjjLtI6wCYh3Rc4Uc_6cli7l-"
 
     # Wompi
-    
-
     WOMPI_PUBLIC_KEY: str = "pub_test_XUEWY6VWRhhtUOFvHBky1b48HutWyp3A"
     WOMPI_INTEGRITY_SECRET: str = "test_integrity_Z7B0TYW4pU8BVmGs4cZvbCEPONUOwaR0"
     WOMPI_ENVIRONMENT: str = "sandbox"
@@ -74,13 +82,17 @@ class Settings(BaseSettings):
 
     @property
     def upload_folder(self) -> str:
-        base = Path(__file__).resolve().parent
+        # Arreglo para que los uploads funcionen tanto en DEV como en el .exe compilado
+        prod_base = Path(sys.argv[0]).resolve().parent
+        dev_base = Path(__file__).resolve().parent
+        
+        # Si la carpeta actual se llama main.dist (Nuitka) usa esa raíz, sino la de DEV
+        base = prod_base if prod_base.name.endswith(".dist") else dev_base
         return str(base / "static" / "uploads")
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
 
 settings = get_settings()

@@ -8,6 +8,7 @@ from spellchecker import SpellChecker
 from sqlalchemy import Integer, cast, func, or_, and_
 from sqlalchemy.orm import selectinload
 from utils.auth import get_current_user_payload, get_token_payload_optional
+from utils.cache import cache
 
 try:
     spell = SpellChecker(language="es")
@@ -53,6 +54,7 @@ def my_courses(
     google_id = payload.get("google_id")
     uc = payload.get("country")
     user_bouth = UserModel.is_vendedor(google_id)
+    cambio_dolar = _get_cambio_dolar()
 
     category_ids = [
         p.category_id
@@ -74,9 +76,39 @@ def my_courses(
     )
 
     return [
-        c.to_dict(light=True, user_country=uc, viewer_google_id=google_id, esVendedor=user_bouth)
+        c.to_dict(
+            light=True,
+            user_country=uc,
+            viewer_google_id=google_id,
+            esVendedor=user_bouth,
+            cambio_dolar=cambio_dolar
+        )
         for c in categories
     ]
+
+
+def _get_cambio_dolar():
+    """Get exchange rate once, cache it per request to avoid N+1 queries."""
+    from models.SystemVariable import SystemVariable
+    cambio_dolar_raw = SystemVariable.query.filter_by(campo_codigo="CAMBIO_DOLAR").first()
+    try:
+        return float(cambio_dolar_raw.dato) if cambio_dolar_raw and cambio_dolar_raw.dato else 1.0
+    except (TypeError, ValueError):
+        return 1.0
+
+
+@cache(ttl_seconds=300)
+def _get_categories_cached(limit: int, offset: int, filter_type: str | None):
+    """Cached query for categories. Returns raw CategoryModel objects."""
+    q = (
+        CategoryModel.query
+        .options(selectinload(CategoryModel.related_categories))
+        .order_by(CategoryModel.id.desc())
+    )
+    condition = _build_filter_condition(filter_type)
+    if condition is not None:
+        q = q.filter(condition)
+    return q.offset(offset).limit(limit).all()
 
 
 @router.get("/all-categories")
@@ -89,18 +121,19 @@ def all_categories(
     viewer_gid = (payload or {}).get("google_id") if payload else None
     uc = (payload or {}).get("country") if payload else None
 
-    user_bouth=UserModel.is_vendedor(viewer_gid)
-    q = (
-        CategoryModel.query
-        .options(selectinload(CategoryModel.related_categories))
-        .order_by(CategoryModel.id.desc())
-    )
-    condition = _build_filter_condition(filter_type)
-    if condition is not None:
-        q = q.filter(condition)
-    categories = q.offset(offset).limit(limit).all()
+    user_bouth = UserModel.is_vendedor(viewer_gid)
+    cambio_dolar = _get_cambio_dolar()
+
+    categories = _get_categories_cached(limit, offset, filter_type)
+
     return [
-        c.to_dict(light=True, user_country=uc, viewer_google_id=viewer_gid,esVendedor= user_bouth)
+        c.to_dict(
+            light=True,
+            user_country=uc,
+            viewer_google_id=viewer_gid,
+            esVendedor=user_bouth,
+            cambio_dolar=cambio_dolar
+        )
         for c in categories
     ]
     
@@ -112,7 +145,9 @@ def get_category_by_id(
 ):
     uc = (payload or {}).get("country") if payload else None
     viewer_gid = (payload or {}).get("google_id") if payload else None
-    user_bouth=UserModel.is_vendedor(viewer_gid)
+    user_bouth = UserModel.is_vendedor(viewer_gid)
+    cambio_dolar = _get_cambio_dolar()
+
     category = (
         CategoryModel.query
         .options(selectinload(CategoryModel.related_categories))
@@ -122,7 +157,13 @@ def get_category_by_id(
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
 
-    return category.to_dict(light=False, user_country=uc, viewer_google_id=viewer_gid, esVendedor=user_bouth )
+    return category.to_dict(
+        light=False,
+        user_country=uc,
+        viewer_google_id=viewer_gid,
+        esVendedor=user_bouth,
+        cambio_dolar=cambio_dolar
+    )
 
 
 @router.get("/{category_id}/bloques")
@@ -140,6 +181,7 @@ def get_category_bloques(
     uc = (payload or {}).get("country") if payload else None
     viewer_gid = (payload or {}).get("google_id") if payload else None
     user_bouth = UserModel.is_vendedor(viewer_gid)
+    cambio_dolar = _get_cambio_dolar()
 
     if category_id in _PILAR_SET:
         pilar_cat = (
@@ -157,7 +199,13 @@ def get_category_bloques(
         return [{
             "pilar": {"id": pilar_cat.id, "titulo": pilar_cat.titulo},
             "bloques": [
-                t.to_dict(light=False, user_country=uc, viewer_google_id=viewer_gid, esVendedor=user_bouth)
+                t.to_dict(
+                    light=False,
+                    user_country=uc,
+                    viewer_google_id=viewer_gid,
+                    esVendedor=user_bouth,
+                    cambio_dolar=cambio_dolar
+                )
                 for t in sorted(temas, key=lambda x: x.id)
             ]
         }]
@@ -186,7 +234,13 @@ def get_category_bloques(
         result.append({
             "pilar": {"id": pilar.id, "titulo": pilar.titulo},
             "bloques": [
-                t.to_dict(light=False, user_country=uc, viewer_google_id=viewer_gid, esVendedor=user_bouth)
+                t.to_dict(
+                    light=False,
+                    user_country=uc,
+                    viewer_google_id=viewer_gid,
+                    esVendedor=user_bouth,
+                    cambio_dolar=cambio_dolar
+                )
                 for t in sorted(temas, key=lambda x: x.id)
             ]
         })
